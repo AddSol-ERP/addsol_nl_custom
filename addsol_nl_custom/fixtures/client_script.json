@@ -1,0 +1,13 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Item",
+  "enabled": 1,
+  "modified": "2026-02-08 21:23:20.784576",
+  "module": "Addsol Nl Custom",
+  "name": "calculate_estimated_weight",
+  "script": "frappe.ui.form.on('Item', {\r\n    refresh(frm) {\r\n        // Refresh custom values\r\n        update_multiplication_factor(frm);\r\n        calculate_estimated_weight(frm);\r\n    },\r\n    custom_length_mm: function(frm) {\r\n        calculate_estimated_weight(frm);\r\n    },\r\n    custom_width_mm: function(frm) {\r\n        calculate_estimated_weight(frm);\r\n    },\r\n    custom_thickness_mm: function(frm) {\r\n        calculate_estimated_weight(frm);\r\n    },\r\n    item_group: function(frm) {\r\n        update_multiplication_factor(frm);\r\n        calculate_estimated_weight(frm);\r\n    }\r\n});\r\n\r\nfunction update_multiplication_factor(frm) {\r\n    if (frm.doc.item_group) {\r\n        frappe.db.get_value('Item Group', frm.doc.item_group, 'custom_multiplication_factor')\r\n            .then(r => {\r\n                let multiplication_factor = r.message.custom_multiplication_factor || 0;\r\n                frm.set_value('custom_multiplication_factor', multiplication_factor);\r\n            })\r\n            .catch(err => {\r\n                console.error('Error fetching multiplication factor:', err);\r\n            });\r\n    }\r\n}\r\n\r\nfunction calculate_estimated_weight(frm) {\r\n    let length = frm.doc.custom_length_mm || 0;\r\n    let width = frm.doc.custom_width_mm || 0;\r\n    let thickness = frm.doc.custom_thickness_mm || 0;\r\n    \r\n    if (length && width && thickness && frm.doc.item_group) {\r\n        // Fetch multiplication factor from Item Group\r\n        frappe.db.get_value('Item Group', frm.doc.item_group, 'custom_multiplication_factor')\r\n            .then(r => {\r\n                let multiplication_factor = r.message.custom_multiplication_factor || 0;\r\n                \r\n                if (multiplication_factor) {\r\n                    let estimated_weight = (length * width * thickness * multiplication_factor) / 100000;\r\n                    frm.set_value('custom_estimated_weight', estimated_weight);\r\n                } else {\r\n                    frm.set_value('custom_estimated_weight', 0);\r\n                }\r\n            })\r\n            .catch(err => {\r\n                console.error('Error fetching multiplication factor:', err);\r\n            });\r\n    } else {\r\n        frm.set_value('custom_estimated_weight', 0);\r\n    }\r\n}",
+  "view": "Form"
+ }
+]
