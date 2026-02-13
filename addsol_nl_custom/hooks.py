@@ -48,6 +48,10 @@ app_license = "mit"
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
+doctype_js = {
+    "Item": "public/js/item.js"
+}
+
 # Svg Icons
 # ------------------
 # include app icons in desk
@@ -137,13 +141,13 @@ app_license = "mit"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	# "*": {
+	# 	"on_update": "method",
+	# 	"on_cancel": "method",
+	# 	"on_trash": "method"
+	# }
+}
 
 # Scheduled Tasks
 # ---------------
@@ -242,6 +246,6 @@ app_license = "mit"
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
 
-fixtures = [
-    {"doctype": "Client Script", "filters": [["name", "in", ["calculate_estimated_weight"]]]}
-]
+# fixtures = [
+#     {"doctype": "Client Script", "filters": [["name", "in", ["calculate_estimated_weight"]]]}
+# ]
