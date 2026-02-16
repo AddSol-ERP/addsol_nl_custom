@@ -147,6 +147,10 @@ doc_events = {
 	# 	"on_cancel": "method",
 	# 	"on_trash": "method"
 	# }
+	"Item": {
+		"autoname": "addsol_nl_custom.addsol_nl_custom.custom.item.item_autoname",
+		"validate": "addsol_nl_custom.addsol_nl_custom.custom.item.item_validate"
+	}
 }
 
 # Scheduled Tasks
