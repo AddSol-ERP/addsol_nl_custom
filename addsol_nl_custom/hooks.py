@@ -149,7 +149,8 @@ doc_events = {
 	# }
 	"Item": {
 		"autoname": "addsol_nl_custom.addsol_nl_custom.custom.item.item_autoname",
-		"validate": "addsol_nl_custom.addsol_nl_custom.custom.item.item_validate"
+		"validate": "addsol_nl_custom.addsol_nl_custom.custom.item.item_validate",
+		"on_update": "addsol_nl_custom.addsol_nl_custom.custom.item.item_on_update",
 	}
 }
 
