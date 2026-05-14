@@ -254,3 +254,18 @@ doc_events = {
 # fixtures = [
 #     {"doctype": "Client Script", "filters": [["name", "in", ["calculate_estimated_weight"]]]}
 # ]
+
+fixtures = [
+    "Custom Field",
+    "Property Setter",
+    "Client Script",
+    "Server Script",
+    "Report",
+    "Print Format",
+    "Workspace",
+    "Role",
+    "Role Profile",
+    "Module Profile",
+    "Workflow",
+    "Notification"
+]
