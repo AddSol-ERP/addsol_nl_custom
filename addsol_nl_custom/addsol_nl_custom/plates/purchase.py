@@ -81,12 +81,12 @@ def apply_amount(doc, row, billable_kg) -> None:
 	row.discount_percentage = 0
 	row.discount_amount = 0
 
-	if row.meta.has_fieldname("custom_weight_per_plate_kg"):
+	if row.meta.get_field("custom_weight_per_plate_kg"):
 		row.custom_weight_per_plate_kg = round_half_up(billable_kg / qty, WEIGHT_PRECISION)
 
 
 def sum_header(doc, fieldname, rows) -> None:
-	if doc.meta.has_fieldname(fieldname):
+	if doc.meta.get_field(fieldname):
 		doc.set(
 			fieldname, round_half_up(sum(frappe.utils.flt(r.get(fieldname)) for r in rows), WEIGHT_PRECISION)
 		)
