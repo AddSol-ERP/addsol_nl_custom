@@ -104,6 +104,19 @@ def formula_variables(formula) -> set[str]:
 	return variables
 
 
+def is_safe_formula(formula) -> bool:
+	"""Whether a formula is acceptable, without raising.
+
+	Used where the answer is a yes/no - deciding whether a group is weighed, for
+	instance - rather than a validation that should stop a save.
+	"""
+	try:
+		formula_variables(formula)
+	except Exception:
+		return False
+	return True
+
+
 def compute_theoretical_weight(item_group, thickness_mm, length_mm, width_mm) -> float:
 	"""Weight in Kg of one plate of this grade and size.
 

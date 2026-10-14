@@ -45,12 +45,18 @@ def create_scrap_group():
 	if frappe.db.exists("Item Group", SCRAP_ITEM_GROUP):
 		return
 
+	# Scrap is weighed, not measured from a drawing, so it has no formula and no
+	# multiplication factor. Both are written explicitly rather than left to a
+	# meta default: a stray default on either field would make this group look
+	# like a weighed grade, and the Item Group validate refuses that.
 	frappe.get_doc(
 		{
 			"doctype": "Item Group",
 			"item_group_name": SCRAP_ITEM_GROUP,
 			"parent_item_group": "All Item Groups",
 			"is_group": 0,
+			"custom_formula": "",
+			"custom_multiplication_factor": 0,
 		}
 	).insert(ignore_permissions=True)
 	print(f"Created Item Group: {SCRAP_ITEM_GROUP}")
