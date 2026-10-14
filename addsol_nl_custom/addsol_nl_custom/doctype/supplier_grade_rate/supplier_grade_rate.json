@@ -14,12 +14,12 @@
  ],
  "fields": [
   {
+   "description": "A grade that carries a weight formula. Saving a rate for any other Item Group is refused.",
    "fieldname": "item_group",
    "fieldtype": "Link",
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Grade",
-   "link_filters": "{\"custom_formula\": \"is\", \"set\"}",
    "options": "Item Group",
    "reqd": 1
   },
