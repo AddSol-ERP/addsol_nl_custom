@@ -63,26 +63,78 @@ def create_scrap_group():
 
 
 def create_scrap_item():
+	"""Create the scrap Item, if there is enough on the site to do it honestly.
+
+	India Compliance requires an HSN/SAC code on every Item, and refuses the
+	insert without one. That is a tax classification, so this does not invent
+	one: it reuses the code the customer already charges on their steel, which
+	is the classification the same business already applies to the same metal.
+
+	With no steel to copy from, the Item is skipped rather than guessed at, and
+	the reason is printed. Plate Settings.scrap_item then stays empty and Part
+	D refuses to book scrap with a message saying so, which is a better failure
+	than the wrong HSN code silently on every scrap invoice.
+	"""
 	if frappe.db.exists("Item", SCRAP_ITEM):
 		return
 
-	# Scrap is weighed, not counted, so stock UOM is Kg and there is no batch or
-	# serial tracking - the weight travels on the row instead.
-	frappe.get_doc(
-		{
-			"doctype": "Item",
-			"item_code": SCRAP_ITEM,
-			"item_name": SCRAP_ITEM,
-			"item_group": SCRAP_ITEM_GROUP,
-			"stock_uom": "Kg",
-			"is_stock_item": 1,
-			"has_batch_no": 0,
-			"has_serial_no": 0,
-			"valuation_method": "FIFO",
-			"description": "Offcuts too small to keep, booked at the source batch's cost per kg.",
-		}
-	).insert(ignore_permissions=True)
-	print(f"Created Item: {SCRAP_ITEM}")
+	hsn_code = find_steel_hsn_code()
+	if not hsn_code:
+		print(
+			f"NOT created: {SCRAP_ITEM}. India Compliance needs an HSN/SAC code on every Item and "
+			"no steel item on this site has one to copy. Create the item by hand with a valid "
+			"code, then set it in Plate Settings."
+		)
+		return
+
+	item = {
+		"doctype": "Item",
+		"item_code": SCRAP_ITEM,
+		"item_name": SCRAP_ITEM,
+		"item_group": SCRAP_ITEM_GROUP,
+		"stock_uom": "Kg",
+		"is_stock_item": 1,
+		"has_batch_no": 0,
+		"has_serial_no": 0,
+		"valuation_method": "FIFO",
+		"description": "Offcuts too small to keep, booked at the source batch's cost per kg.",
+	}
+	if hsn_code:
+		item["gst_hsn_code"] = hsn_code
+
+	try:
+		frappe.get_doc(item).insert(ignore_permissions=True)
+	except Exception as error:
+		# Never let a third party's mandatory field stop a migration.
+		print(f"NOT created: {SCRAP_ITEM} - {error}. Create it by hand and set it in Plate Settings.")
+		return
+
+	print(f"Created Item: {SCRAP_ITEM} (HSN/SAC {hsn_code}, copied from the site's steel)")
+
+
+def find_steel_hsn_code():
+	"""The most common HSN/SAC code already in use on the site's steel.
+
+	Scoped to items under an Item Group that carries a weight formula, so a
+	services or finished-goods code cannot be picked up by accident.
+	"""
+	if not frappe.db.has_column("Item", "gst_hsn_code"):
+		return None
+
+	rows = frappe.db.sql(
+		"""
+		select i.gst_hsn_code, count(*) as uses
+		  from `tabItem` i
+		  inner join `tabItem Group` g on g.name = i.item_group
+		 where ifnull(i.gst_hsn_code, '') != ''
+		   and ifnull(g.custom_formula, '') != ''
+		 group by i.gst_hsn_code
+		 order by uses desc
+		 limit 1
+		"""
+	)
+
+	return rows[0][0] if rows else None
 
 
 def apply_single_defaults():

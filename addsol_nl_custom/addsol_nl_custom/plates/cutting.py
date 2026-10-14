@@ -197,19 +197,26 @@ def get_or_create_offcut_item(source_item, length_mm, width_mm) -> str:
 	if frappe.db.exists("Item", name):
 		return name
 
-	item = frappe.get_doc(
-		{
-			"doctype": "Item",
-			"item_code": name,
-			"item_name": name,
-			"item_group": item_group,
-			"custom_thickness_dropdown": thickness,
-			"custom_length_mm": length_mm,
-			"custom_width_mm": width_mm,
-			"custom_is_offcut": 1,
-			"custom_source_item": source_item,
-		}
-	).insert(ignore_permissions=True)
+	item = {
+		"doctype": "Item",
+		"item_code": name,
+		"item_name": name,
+		"item_group": item_group,
+		"custom_thickness_dropdown": thickness,
+		"custom_length_mm": length_mm,
+		"custom_width_mm": width_mm,
+		"custom_is_offcut": 1,
+		"custom_source_item": source_item,
+	}
+
+	# An offcut is the same steel in a smaller size, so it carries the same
+	# HSN/SAC code. India Compliance refuses to save an Item without one, and
+	# these are created by code where nobody is there to type it.
+	hsn_code = frappe.db.get_value("Item", source_item, "gst_hsn_code")
+	if hsn_code:
+		item["gst_hsn_code"] = hsn_code
+
+	item = frappe.get_doc(item).insert(ignore_permissions=True)
 
 	# The plate defaults are applied by item_validate, but the Item Group's
 	# series have to be in place first.
