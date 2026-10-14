@@ -353,7 +353,6 @@ fixtures = [
 	},
 	{"dt": "Report", "filters": [["module", "=", "Addsol Nl Custom"]]},
 	{"dt": "Role", "filters": [["is_custom", "=", 1]]},
-	{"dt": "Custom DocPerm", "filters": [["role", "=", "Plate Weight Approver"]]},
 	{
 		"dt": "Notification",
 		"filters": [

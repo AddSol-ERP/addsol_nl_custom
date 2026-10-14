@@ -37,6 +37,34 @@ PLATE_DOCTYPES = {
 }
 
 
+def fixture_doctypes_from_hooks():
+	"""The doctypes listed in hooks.py's `fixtures`, read properly.
+
+	The list mixes bare strings and {"dt": ..., "filters": [...]} dicts, so a
+	line-based parse gets it wrong.
+	"""
+	import ast
+
+	with open(os.path.join(APP_DIR, "hooks.py")) as f:
+		tree = ast.parse(f.read())
+
+	for node in tree.body:
+		if not isinstance(node, ast.Assign):
+			continue
+		if not any(getattr(t, "id", None) == "fixtures" for t in node.targets):
+			continue
+		doctypes = []
+		for entry in node.value.elts:
+			if isinstance(entry, ast.Constant):
+				doctypes.append(entry.value)
+			elif isinstance(entry, ast.Dict):
+				for k, v in zip(entry.keys, entry.values, strict=True):
+					if getattr(k, "value", None) in ("dt", "doctype"):
+						doctypes.append(v.value)
+		return doctypes
+	return []
+
+
 def load(path):
 	with open(path) as f:
 		return json.load(f)
@@ -144,3 +172,78 @@ class TestCustomFieldFixture(unittest.TestCase):
 		"""tabDocField has a CHECK constraint that rejected ours during migrate."""
 		for field in load(CUSTOM_FIELD_FIXTURE):
 			self.assertIn(field.get("link_filters"), (None, "", []))
+
+
+class TestFixtures(unittest.TestCase):
+	"""What `sync_fixtures` needs from every record in a fixture file."""
+
+	def test_every_record_has_a_name(self):
+		"""import_file_by_path does doc["name"] with no fallback.
+
+		A record without one stops the whole migration with KeyError: 'name',
+		which is how the hand-written Custom DocPerm did it.
+		"""
+		for path in glob.glob(os.path.join(APP_DIR, "fixtures", "*.json")):
+			for record in load(path):
+				self.assertIn(
+					"name",
+					record,
+					f"{os.path.basename(path)} has a record with no name: {record.get('doctype')!r}",
+				)
+				self.assertTrue(record["name"], f"{os.path.basename(path)} has an empty name")
+
+	def test_our_customisation_records_are_named_the_way_frappe_names_them(self):
+		"""These must match on import, or the change never lands.
+
+		Only Custom Field and Property Setter follow <DocType>-<id>. Role, Client
+		Script, Print Format, Notification, Server Script, Report, Workflow and
+		Role Profile are all named by their own document name.
+
+		Scoped to the plate DocTypes. The fixture also carries pre-existing HR
+		customisations that are not this app's to rename - Employee.custom_aadhar_card
+		among them, whose name has a transposed letter - and it imports stably
+		by name, so it is left as it is.
+		"""
+		for path in glob.glob(os.path.join(APP_DIR, "fixtures", "*.json")):
+			for record in load(path):
+				if record["doctype"] == "Custom Field" and record["dt"] in PLATE_DOCTYPES:
+					self.assertEqual(record["name"], f"{record['dt']}-{record['fieldname']}")
+
+				elif record["doctype"] == "Property Setter" and record["doc_type"] in PLATE_DOCTYPES:
+					self.assertEqual(
+						record["name"],
+						f"{record['doc_type']}-{record.get('field_name') or 'main'}-{record['property']}",
+					)
+
+				elif record["doctype"] == "Property Setter":
+					expected = (
+						f"{record['doc_type']}-{record.get('field_name') or 'main'}-{record['property']}"
+					)
+					self.assertEqual(record["name"], expected)
+
+	def test_every_fixture_file_is_covered_by_a_hooks_filter(self):
+		"""Every file on disk must be one the export filters would produce.
+
+		sync_fixtures imports every .json in the folder regardless of hooks.py;
+		the filters only decide what export writes. A file with no filter entry
+		is exported wholesale next time, and a filter with no file imports
+		nothing.
+		"""
+		filtered = fixture_doctypes_from_hooks()
+		on_disk = {
+			os.path.splitext(name)[0]
+			for name in os.listdir(os.path.join(APP_DIR, "fixtures"))
+			if name.endswith(".json")
+		}
+		scrubbed = {d.replace(" ", "_").replace("-", "_").lower() for d in filtered}
+
+		self.assertEqual(
+			on_disk - scrubbed,
+			set(),
+			"These fixture files have no hooks.py entry, so nothing keeps them filtered",
+		)
+		self.assertEqual(
+			scrubbed - on_disk,
+			set(),
+			"These hooks.py filters have no fixture file, so they import nothing",
+		)

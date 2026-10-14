@@ -27,6 +27,7 @@ SINGLE_DEFAULTS = {
 
 def execute():
 	create_role()
+	create_approver_permission()
 	create_scrap_group()
 	create_scrap_item()
 	apply_single_defaults()
@@ -39,6 +40,39 @@ def create_role():
 
 	frappe.get_doc({"doctype": "Role", "role_name": ROLE}).insert(ignore_permissions=True)
 	print(f"Created Role: {ROLE}")
+
+
+def create_approver_permission():
+	"""Give the approver read and write on Purchase Receipt at permlevel 1.
+
+	Created here rather than exported as a fixture, for two reasons.
+	Custom DocPerm is named by hash, so a fixture row would have to carry a
+	name that means nothing to anyone; and Frappe's own customisation sync
+	deletes and rebuilds DocPerm rows rather than importing them from fixtures.
+	Writing it once, idempotently, is simpler and survives both.
+
+	permlevel 1 is where the weight decision lives, so this is the whole of the
+	role's power - deliberately nothing on any other DocType.
+	"""
+	if not frappe.db.exists("DocType", "Purchase Receipt"):
+		return
+
+	if frappe.db.exists("Custom DocPerm", {"role": ROLE, "permlevel": 1, "parent": "Purchase Receipt"}):
+		return
+
+	frappe.get_doc(
+		{
+			"doctype": "Custom DocPerm",
+			"role": ROLE,
+			"permlevel": 1,
+			"parent": "Purchase Receipt",
+			"parenttype": "DocType",
+			"read": 1,
+			"write": 1,
+		}
+	).insert(ignore_permissions=True)
+
+	print(f"Created Custom DocPerm: {ROLE} on Purchase Receipt (permlevel 1, read + write)")
 
 
 def create_scrap_group():
