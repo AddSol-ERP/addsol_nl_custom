@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from frappe import _
 
 from addsol_nl_custom.addsol_nl_custom.plates.grouping import is_weighed_group
 from addsol_nl_custom.addsol_nl_custom.plates.item_defaults import (
@@ -71,8 +72,31 @@ def item_validate(doc, method):
 		doc.description = build_plate_description(thickness_mm, length_mm, width_mm)
 
 	if is_weighed_group(doc.item_group):
-		set_estimated_weight(doc, thickness_mm, length_mm, width_mm)
+		refresh_estimated_weight(doc, thickness_mm, length_mm, width_mm)
 		apply_plate_item_defaults(doc)
+
+
+def refresh_estimated_weight(doc, thickness_mm, length_mm, width_mm) -> None:
+	"""Keep the stored theoretical weight in step with the dimensions.
+
+	A new Item is strict: if the weight cannot be worked out that is a setup
+	mistake and it should be reported now, not later on a receipt.
+
+	An Item that already exists is not. Half-configured legacy Items are common
+	after this migration and blocking their edits would be worse than leaving a
+	stale weight on file, so the reason is reported and the stored value stands.
+	"""
+	try:
+		set_estimated_weight(doc, thickness_mm, length_mm, width_mm)
+	except frappe.ValidationError as error:
+		if doc.get("__islocal"):
+			raise
+		frappe.msgprint(
+			_("Item {0} keeps its existing estimated weight. It could not be recalculated: {1}").format(
+				doc.name, error
+			),
+			alert=True,
+		)
 
 
 def set_estimated_weight(doc, thickness_mm, length_mm, width_mm) -> None:

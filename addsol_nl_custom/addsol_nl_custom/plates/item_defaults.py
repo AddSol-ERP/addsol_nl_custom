@@ -44,9 +44,11 @@ TRANSACTION_REFERENCES = (
 	("BOM Item", "item_code"),
 )
 
-STOCK_UOM_CHANGE_MESSAGE = _(
-	"Item {0} already holds stock under stock UOM {1} and cannot be moved to {2}. "
-	"Run it down first, or create a new Item."
+LEGACY_KG_ITEM_MESSAGE = _(
+	"Item {0} still holds stock in {1}, so none of the per-piece plate options were "
+	"applied to it. It stays as it is: moving the stock UOM to {2} under an existing "
+	"balance would reinterpret every quantity on the ledger. Run this item down by "
+	"Stock Reconciliation, or leave it and create new Items in {2} for further buying."
 )
 
 TRACKING_ON_MESSAGE = _(
@@ -96,10 +98,15 @@ def apply_plate_item_defaults(doc) -> None:
 	has_stock = item_has_stock(doc.get("name")) if doc.get("name") else False
 
 	if has_stock and doc.get("stock_uom") not in (None, "", wanted_uom):
-		frappe.throw(
-			STOCK_UOM_CHANGE_MESSAGE.format(doc.get("name"), doc.get("stock_uom"), wanted_uom),
-			title=_("Stock UOM cannot be changed"),
+		# An Item left over from the Kg era. Converting it is out of scope, and
+		# moving its stock UOM under an existing balance would reinterpret every
+		# quantity on the ledger. Leave the Item exactly as it is and say so -
+		# throwing here used to lock these Items against any edit at all.
+		frappe.msgprint(
+			LEGACY_KG_ITEM_MESSAGE.format(doc.get("name"), doc.get("stock_uom"), wanted_uom),
+			alert=True,
 		)
+		return
 
 	not_applied = []
 

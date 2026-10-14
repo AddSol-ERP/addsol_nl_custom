@@ -140,13 +140,50 @@ class TestPlateItem(FrappeTestCase):
 		self.assertEqual(item.has_batch_no, 0)
 		self.assertEqual(item.create_new_batch, 0)
 
-	def test_b5_refuses_to_move_the_stock_uom_of_an_item_with_stock(self):
+	def test_b5_leaves_a_legacy_kg_item_alone_and_stays_editable(self):
+		# A Kg-era plate Item that already holds stock must not be locked
+		# against edits, and must not have per-piece options forced onto it.
+		item = make_plate_item()
+		item.stock_uom = "Kg"
+		item.has_serial_no = 0
+		item.has_batch_no = 0
+		item.create_new_batch = 0
+		item.valuation_method = "FIFO"
+		item.serial_no_series = "OLD-SERIES-.#####"
+
+		messages = []
+		with (
+			patch.object(item_defaults, "item_has_stock", return_value=True),
+			patch.object(item_defaults.frappe, "msgprint", side_effect=messages.append),
+		):
+			apply_plate_item_defaults(item)
+
+		# Untouched.
+		self.assertEqual(item.stock_uom, "Kg")
+		self.assertEqual(item.has_serial_no, 0)
+		self.assertEqual(item.has_batch_no, 0)
+		self.assertEqual(item.create_new_batch, 0)
+		self.assertEqual(item.serial_no_series, "OLD-SERIES-.#####")
+
+		# And told why, rather than refused.
+		self.assertEqual(len(messages), 1)
+		self.assertIn("Kg", messages[0])
+		self.assertIn("Nos", messages[0])
+
+	def test_b5_leaves_a_legacy_kg_item_editable_on_save(self):
 		item = make_plate_item()
 		item.stock_uom = "Kg"
 
-		with patch.object(item_defaults, "item_has_stock", return_value=True):
-			with self.assertRaises(frappe.ValidationError):
-				apply_plate_item_defaults(item)
+		reloaded = frappe.get_doc("Item", item.name)
+		reloaded.stock_uom = "Kg"
+
+		with (
+			patch.object(item_defaults, "item_has_stock", return_value=True),
+			patch.object(item_defaults.frappe, "msgprint"),
+		):
+			reloaded.save()  # must not raise
+
+		self.assertEqual(frappe.db.get_value("Item", item.name, "stock_uom"), "Kg")
 
 	def test_b4_locks_the_dimensions_once_the_item_is_used(self):
 		item = make_plate_item()
@@ -180,6 +217,38 @@ class TestPlateItem(FrappeTestCase):
 		# The name does not move under an Item that is still unused.
 		self.assertEqual(reloaded.name, "MS Plate 250 Test-10x2500x1250")
 		self.assertEqual(reloaded.custom_length_mm, 3000)
+
+	def test_a_new_item_must_be_weighable(self):
+		# Strict on the way in: a missing dimension is a setup mistake and is
+		# reported when the Item is created, not on a receipt six weeks later.
+		with self.assertRaises(frappe.ValidationError):
+			frappe.get_doc(
+				{
+					"doctype": "Item",
+					"item_code": "NO-WIDTH",
+					"item_name": "No Width",
+					"item_group": GROUP,
+					"stock_uom": "Nos",
+					"is_stock_item": 1,
+					"custom_thickness_dropdown": THICKNESS,
+					"custom_length_mm": 2500,
+					"custom_width_mm": 0,
+				}
+			).insert(ignore_permissions=True)
+
+	def test_an_existing_item_stays_editable_when_its_weight_cannot_be_recomputed(self):
+		# Half-configured legacy Items must not be locked out of edits.
+		item = make_plate_item()
+		reloaded = frappe.get_doc("Item", item.name)
+		reloaded.custom_width_mm = 0
+
+		with patch("addsol_nl_custom.addsol_nl_custom.plates.item_hooks.frappe.msgprint"):
+			reloaded.save()  # must not raise
+
+		self.assertEqual(
+			frappe.db.get_value("Item", item.name, "custom_estimated_weight"),
+			245.313,  # the weight from before, left standing
+		)
 
 
 def make_sink_item():
