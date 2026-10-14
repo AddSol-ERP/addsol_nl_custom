@@ -48,3 +48,14 @@ def get_plate_settings():
 		"enable_weight_based_purchasing": bool(get_setting("enable_weight_based_purchasing", 0)),
 		"cutting_operation": get_setting("cutting_operation"),
 	}
+
+
+@frappe.whitelist()
+def is_weight_managed_item(item_code=None):
+	"""Tell the purchase forms whether to show weight pricing for an Item."""
+	if not item_code or not get_setting("enable_weight_based_purchasing", 0):
+		return False
+
+	from addsol_nl_custom.addsol_nl_custom.plates.grouping import is_weighed_item
+
+	return bool(is_weighed_item(item_code))

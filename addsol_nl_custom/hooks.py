@@ -53,6 +53,8 @@ app_license = "mit"
 doctype_js = {
 	"Item": "public/js/item.js",
 	"Job Card": "public/js/job_card.js",
+	"Purchase Order": "public/js/purchase_weight_pricing.js",
+	"Purchase Receipt": "public/js/purchase_weight_pricing.js",
 }
 
 # Svg Icons
