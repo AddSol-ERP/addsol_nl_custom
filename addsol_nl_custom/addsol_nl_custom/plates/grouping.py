@@ -32,15 +32,15 @@ def is_weighed_group(item_group) -> bool:
 	if not item_group:
 		return False
 
-	formula, mf = (
-		frappe.db.get_value(
-			"Item Group",
-			item_group,
-			["custom_formula", "custom_multiplication_factor"],
-			as_dict=True,
-		)
-		or frappe._dict()
+	group = frappe.db.get_value(
+		"Item Group",
+		item_group,
+		["custom_formula", "custom_multiplication_factor"],
+		as_dict=True,
 	)
+	group = group or frappe._dict()
+	formula = group.custom_formula
+	mf = group.custom_multiplication_factor
 
 	if not formula or not is_safe_formula(formula):
 		return False
