@@ -247,3 +247,58 @@ class TestFixtures(unittest.TestCase):
 			set(),
 			"These hooks.py filters have no fixture file, so they import nothing",
 		)
+
+	def test_every_plate_field_says_where_it_goes(self):
+		"""insert_after is what positions a custom field on the form.
+
+		Frappe's Meta.sort_fields honours each field's insert_after outside the
+		field_order property-setter branch, so this alone is enough. A DocType
+		field_order setter would take priority over it and freeze the layout, so
+		there is deliberately none.
+		"""
+		missing = [f"{f['dt']}.{f['fieldname']}" for f in plate_custom_fields() if not f.get("insert_after")]
+		self.assertEqual(
+			missing,
+			[],
+			"Without insert_after these fields land at the top of the form: " + ", ".join(missing),
+		)
+
+	def test_we_add_no_field_order_setter(self):
+		"""A DocType field_order setter beats insert_after, so we add none.
+
+		The site already carries four - Item, Item Group, Batch and Purchase
+		Receipt Item - from the customer's own work on their forms. Those are
+		theirs and stay. This app only ever adds precision setters, because
+		insert_after is enough to place a custom field and a frozen order would
+		override it.
+		"""
+		import importlib.util
+
+		spec = importlib.util.spec_from_file_location(
+			"ps", os.path.join(os.path.dirname(APP_DIR), "tools", "generate_plate_property_setters.py")
+		)
+		generator = importlib.util.module_from_spec(spec)
+		spec.loader.exec_module(generator)
+
+		self.assertEqual(
+			generator.PRECISION_6_FIELDS,
+			["rate", "base_rate", "net_rate", "base_net_rate", "price_list_rate"],
+		)
+
+		runtime = os.path.join(APP_DIR, "fixtures", "property_setter.json")
+		before = len(load(runtime))
+
+		generator.main()
+		self.assertEqual(
+			len(load(runtime)),
+			before,
+			"re-running the property setter generator changed the file; it must be idempotent",
+		)
+
+		for record in load(runtime):
+			if record["property"] == "field_order":
+				self.assertIn(
+					record["doc_type"],
+					{"Item", "Item Group", "Batch", "Purchase Receipt Item"},
+					f"{record['doc_type']} has a field_order setter this app must not create",
+				)
