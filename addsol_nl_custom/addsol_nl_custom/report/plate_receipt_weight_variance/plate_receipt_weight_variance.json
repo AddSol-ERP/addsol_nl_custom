@@ -1,0 +1,79 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-10-14 00:00:00.000000",
+ "doctype": "Report",
+ "engine": "InnoDB",
+ "field_order": [],
+ "fields": [],
+ "filters": [
+  {
+   "default": "Today -30d",
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From Date",
+   "reqd": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "get_values": 1,
+   "label": "Supplier",
+   "options": "Supplier"
+  },
+  {
+   "fieldname": "item_group",
+   "fieldtype": "Link",
+   "get_values": 1,
+   "label": "Item Group",
+   "options": "Item Group"
+  },
+  {
+   "default": "0",
+   "fieldname": "above_tolerance_only",
+   "fieldtype": "Check",
+   "label": "Above Tolerance Only"
+  }
+ ],
+ "is_standard": "No",
+ "letter_head": "Standard",
+ "modified": "2026-10-14 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Addsol Nl Custom",
+ "name": "Plate Receipt Weight Variance",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "Purchase Receipt",
+ "report_name": "Plate Receipt Weight Variance",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "Purchase User"
+  },
+  {
+   "role": "Purchase Manager"
+  },
+  {
+   "role": "Stock User"
+  },
+  {
+   "role": "Stock Manager"
+  },
+  {
+   "role": "Accounts User"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

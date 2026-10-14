@@ -1,0 +1,42 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-10-14 00:00:00.000000",
+ "doctype": "Report",
+ "engine": "InnoDB",
+ "field_order": [],
+ "fields": [],
+ "filters": [
+  {"fieldname": "grade", "fieldtype": "Link", "label": "Grade", "options": "Item Group", "get_values": 1},
+  {"fieldname": "thickness", "fieldtype": "Link", "label": "Thickness", "options": "Thickness", "get_values": 1},
+  {"fieldname": "item", "fieldtype": "Link", "label": "Item", "options": "Item", "get_values": 1},
+  {"fieldname": "warehouse", "fieldtype": "Link", "label": "Warehouse", "options": "Warehouse", "get_values": 1},
+  {"fieldname": "heat_number", "fieldtype": "Data", "label": "Heat Number", "get_values": 1},
+  {"fieldname": "batch", "fieldtype": "Link", "label": "Batch", "options": "Batch", "get_values": 1},
+  {"fieldname": "include_offcuts", "fieldtype": "Check", "label": "Include Offcuts", "default": "1"}
+ ],
+ "is_standard": "No",
+ "letter_head": "Standard",
+ "modified": "2026-10-14 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Addsol Nl Custom",
+ "name": "Plate Stock Register",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "Serial No",
+ "report_name": "Plate Stock Register",
+ "report_type": "Script Report",
+ "roles": [
+  {"role": "Stock User"},
+  {"role": "Stock Manager"},
+  {"role": "Manufacturing User"},
+  {"role": "Manufacturing Manager"},
+  {"role": "Accounts User"},
+  {"role": "Accounts Manager"},
+  {"role": "Purchase User"},
+  {"role": "System Manager"}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

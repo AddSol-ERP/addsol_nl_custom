@@ -1,0 +1,117 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-10-14 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "section_offcut",
+  "length_mm",
+  "column_break_offcut",
+  "width_mm",
+  "offcut_item",
+  "section_result",
+  "theoretical_weight_kg",
+  "weight_kg",
+  "column_break_result",
+  "value",
+  "batch_no",
+  "serial_no"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_offcut",
+   "fieldtype": "Section Break",
+   "label": "Offcut Size"
+  },
+  {
+   "description": "Longer side of the offcut, in mm.",
+   "fieldname": "length_mm",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Length (mm)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_offcut",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Shorter side of the offcut, in mm.",
+   "fieldname": "width_mm",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Width (mm)",
+   "reqd": 1
+  },
+  {
+   "description": "Created on submit, one Item per offcut size. It reuses an existing Item when one already matches.",
+   "fieldname": "offcut_item",
+   "fieldtype": "Link",
+   "label": "Offcut Item",
+   "options": "Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_result",
+   "fieldtype": "Section Break",
+   "label": "Result"
+  },
+  {
+   "description": "Theoretical weight of this size in the source grade. Filled in on validate.",
+   "fieldname": "theoretical_weight_kg",
+   "fieldtype": "Float",
+   "label": "Theoretical Weight (Kg)",
+   "precision": "3",
+   "read_only": 1
+  },
+  {
+   "bold": 1,
+   "description": "Theoretical weight adjusted by the source batch's actual to theoretical ratio, so the offcut keeps the plate's real density.",
+   "fieldname": "weight_kg",
+   "fieldtype": "Float",
+   "label": "Weight (Kg)",
+   "precision": "3",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_result",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Weight times the source batch's cost per kg.",
+   "fieldname": "value",
+   "fieldtype": "Currency",
+   "label": "Value",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "batch_no",
+   "fieldtype": "Link",
+   "label": "Batch",
+   "options": "Batch",
+   "read_only": 1
+  },
+  {
+   "fieldname": "serial_no",
+   "fieldtype": "Link",
+   "label": "Serial No",
+   "options": "Serial No",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-10-14 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Addsol Nl Custom",
+ "name": "Plate Cutting Offcut",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

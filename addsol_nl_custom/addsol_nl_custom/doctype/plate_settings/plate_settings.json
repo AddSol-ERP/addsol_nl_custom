@@ -1,0 +1,167 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-10-14 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "section_purchasing",
+  "enable_weight_based_purchasing",
+  "weight_tolerance_pct",
+  "approver_role",
+  "column_break_purchasing",
+  "over_billing_allowance_pct",
+  "section_cutting",
+  "cutting_operation",
+  "offcut_batch_series",
+  "offcut_warehouse",
+  "scrap_item",
+  "column_break_cutting",
+  "min_offcut_length_mm",
+  "min_offcut_width_mm"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_purchasing",
+   "fieldtype": "Section Break",
+   "label": "Purchasing"
+  },
+  {
+   "bold": 1,
+   "default": "0",
+   "description": "Off by default. While this is off, the weight rules in Part D do nothing: rates and amounts stay whatever the user types. Turn it on only after the acceptance tests pass on a copy site.",
+   "fieldname": "enable_weight_based_purchasing",
+   "fieldtype": "Check",
+   "label": "Enable Weight Based Purchasing"
+  },
+  {
+   "default": "10",
+   "description": "A supplier weight within this percentage of the estimated weight is accepted automatically. Above it the receipt waits for an approver. Changing this affects receipts entered afterwards only.",
+   "fieldname": "weight_tolerance_pct",
+   "fieldtype": "Percent",
+   "label": "Weight Tolerance (%)"
+  },
+  {
+   "description": "Only holders of this role may decide the accepted weight when the variance is above tolerance.",
+   "fieldname": "approver_role",
+   "fieldtype": "Link",
+   "label": "Approver Role",
+   "options": "Role"
+  },
+  {
+   "fieldname": "column_break_purchasing",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "10",
+   "description": "Invoice amount may exceed the Purchase Order estimate by this much, which covers the weight tolerance.",
+   "fieldname": "over_billing_allowance_pct",
+   "fieldtype": "Percent",
+   "label": "Over Billing Allowance (%)"
+  },
+  {
+   "fieldname": "section_cutting",
+   "fieldtype": "Section Break",
+   "label": "Cutting"
+  },
+  {
+   "description": "The Job Card operation that shows the Record Cutting button.",
+   "fieldname": "cutting_operation",
+   "fieldtype": "Link",
+   "label": "Cutting Operation",
+   "options": "Operation"
+  },
+  {
+   "default": "OFB-.YY.-.#####",
+   "description": "Naming series for batches created by a cutting record.",
+   "fieldname": "offcut_batch_series",
+   "fieldtype": "Data",
+   "label": "Offcut Batch Series"
+  },
+  {
+   "description": "Where offcuts are put away when the Manufacture entry takes them back in.",
+   "fieldname": "offcut_warehouse",
+   "fieldtype": "Link",
+   "label": "Offcut Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "default": "MS Scrap",
+   "description": "Item used for scrap, in Kg, valued at the source batch's cost per kg.",
+   "fieldname": "scrap_item",
+   "fieldtype": "Link",
+   "label": "Scrap Item",
+   "options": "Item"
+  },
+  {
+   "fieldname": "column_break_cutting",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Fallback only. The Item Group's own value is used when it has one, because a usable offcut off 2.5 mm plate is not a usable offcut off 25 mm plate.",
+   "fieldname": "min_offcut_length_mm",
+   "fieldtype": "Float",
+   "label": "Minimum Offcut Length (mm)"
+  },
+  {
+   "description": "Fallback only. See Minimum Offcut Length.",
+   "fieldname": "min_offcut_width_mm",
+   "fieldtype": "Float",
+   "label": "Minimum Offcut Width (mm)"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-10-14 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Addsol Nl Custom",
+ "name": "Plate Settings",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Stock User"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Purchase User"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Manufacturing User"
+  }
+ ],
+ "quick_entry": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

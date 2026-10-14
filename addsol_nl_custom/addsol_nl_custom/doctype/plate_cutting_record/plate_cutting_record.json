@@ -1,0 +1,274 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-10-14 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "section_work",
+  "work_order",
+  "job_card",
+  "column_break_work",
+  "status",
+  "section_source",
+  "source_serial_no",
+  "source_item",
+  "source_batch",
+  "heat_number",
+  "column_break_source",
+  "thickness_mm",
+  "source_length_mm",
+  "source_width_mm",
+  "source_weight_kg",
+  "section_weights",
+  "source_cost_per_kg",
+  "column_break_weights",
+  "ratio",
+  "scrap_weight_kg",
+  "scrap_value",
+  "total_offcut_weight_kg",
+  "total_offcut_value",
+  "consumed_weight_kg",
+  "section_offcuts",
+  "offcuts",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_work",
+   "fieldtype": "Section Break",
+   "label": "Work"
+  },
+  {
+   "fieldname": "work_order",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Work Order",
+   "options": "Work Order",
+   "reqd": 1
+  },
+  {
+   "description": "The Job Card whose operation is the cutting operation.",
+   "fieldname": "job_card",
+   "fieldtype": "Link",
+   "label": "Job Card",
+   "options": "Job Card",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_work",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "\nDraft\nRecorded\nStock Updated",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_source",
+   "fieldtype": "Section Break",
+   "label": "Source Plate"
+  },
+  {
+   "description": "The plate that was cut. Must be active and sitting in the Work Order's WIP warehouse.",
+   "fieldname": "source_serial_no",
+   "fieldtype": "Link",
+   "label": "Source Serial No",
+   "options": "Serial No",
+   "reqd": 1
+  },
+  {
+   "fieldname": "source_item",
+   "fieldtype": "Link",
+   "label": "Source Item",
+   "options": "Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_batch",
+   "fieldtype": "Link",
+   "label": "Source Batch",
+   "options": "Batch",
+   "read_only": 1
+  },
+  {
+   "fieldname": "heat_number",
+   "fieldtype": "Data",
+   "label": "Heat Number",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_source",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "thickness_mm",
+   "fieldtype": "Float",
+   "label": "Thickness (mm)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_length_mm",
+   "fieldtype": "Float",
+   "label": "Source Length (mm)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_width_mm",
+   "fieldtype": "Float",
+   "label": "Source Width (mm)",
+   "read_only": 1
+  },
+  {
+   "bold": 1,
+   "fieldname": "source_weight_kg",
+   "fieldtype": "Float",
+   "label": "Source Weight (Kg)",
+   "precision": "3",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_weights",
+   "fieldtype": "Section Break",
+   "label": "Weights and Value"
+  },
+  {
+   "fieldname": "source_cost_per_kg",
+   "fieldtype": "Currency",
+   "label": "Source Cost per Kg",
+   "options": "currency",
+   "precision": "4",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_weights",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "The source batch's actual to theoretical ratio. The offcut weight is its theoretical weight times this.",
+   "fieldname": "ratio",
+   "fieldtype": "Float",
+   "label": "Actual / Theoretical Ratio",
+   "precision": "4",
+   "read_only": 1
+  },
+  {
+   "fieldname": "scrap_weight_kg",
+   "fieldtype": "Float",
+   "label": "Scrap Weight (Kg)",
+   "precision": "3"
+  },
+  {
+   "description": "Scrap weight times the source cost per kg.",
+   "fieldname": "scrap_value",
+   "fieldtype": "Currency",
+   "label": "Scrap Value",
+   "options": "currency",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_offcut_weight_kg",
+   "fieldtype": "Float",
+   "label": "Total Offcut Weight (Kg)",
+   "precision": "3",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_offcut_value",
+   "fieldtype": "Currency",
+   "label": "Total Offcut Value",
+   "options": "currency",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "description": "Source weight minus the offcuts and the scrap. Cannot go below zero.",
+   "fieldname": "consumed_weight_kg",
+   "fieldtype": "Float",
+   "label": "Consumed Weight (Kg)",
+   "precision": "3",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_offcuts",
+   "fieldtype": "Section Break",
+   "label": "Offcuts"
+  },
+  {
+   "fieldname": "offcuts",
+   "fieldtype": "Table",
+   "label": "Offcuts",
+   "options": "Plate Cutting Offcut"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Plate Cutting Record",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-14 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Addsol Nl Custom",
+ "name": "Plate Cutting Record",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Manufacturing User",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Manufacturing Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Stock User"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User"
+  }
+ ],
+ "quick_entry": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

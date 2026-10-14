@@ -50,7 +50,10 @@ app_license = "mit"
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
-doctype_js = {"Item": "public/js/item.js"}
+doctype_js = {
+	"Item": "public/js/item.js",
+	"Job Card": "public/js/job_card.js",
+}
 
 # Svg Icons
 # ------------------
@@ -148,6 +151,31 @@ doc_events = {
 	},
 	"Item Group": {
 		"validate": "addsol_nl_custom.addsol_nl_custom.plates.item_group_hooks.item_group_validate",
+	},
+	"Supplier": {
+		"validate": "addsol_nl_custom.addsol_nl_custom.plates.supplier_rates.check_no_overlap",
+	},
+	# Part D. All three of these stand down while Plate Settings'
+	# enable_weight_based_purchasing is off, so they cannot move money on a
+	# half-finished deployment.
+	"Purchase Order": {
+		"before_validate": "addsol_nl_custom.addsol_nl_custom.plates.purchase.po_before_validate",
+	},
+	"Purchase Receipt": {
+		"before_validate": "addsol_nl_custom.addsol_nl_custom.plates.purchase.pr_before_validate",
+		"before_submit": "addsol_nl_custom.addsol_nl_custom.plates.purchase.pr_before_submit",
+		"on_submit": "addsol_nl_custom.addsol_nl_custom.plates.receipt_meta.apply_receipt_metadata",
+	},
+	"Purchase Invoice": {
+		"before_validate": "addsol_nl_custom.addsol_nl_custom.plates.purchase.pi_before_validate",
+	},
+	# Part D5/D6, cutting.
+	"Stock Entry": {
+		"before_validate": (
+			"addsol_nl_custom.addsol_nl_custom.plates.offcut_stock.add_offcuts_to_manufacture_entry"
+		),
+		"on_submit": "addsol_nl_custom.addsol_nl_custom.plates.offcut_stock.sync_cutting_records",
+		"on_cancel": "addsol_nl_custom.addsol_nl_custom.plates.offcut_stock.sync_cutting_records",
 	},
 }
 
@@ -310,11 +338,17 @@ fixtures = [
 			]
 		],
 	},
-	# "IRS 1099 Form" is a standard=No US regional format and is not ours.
-	{"dt": "Print Format", "filters": [["name", "in", ["MPO Format"]]]},
-	# A2 removed "Attendance Register"; "Stock Entry Ledger" is the team's own.
+	# The two plate formats are ours. "IRS 1099 Form" is a standard=No US
+	# regional format and is not. "MPO Format" belongs to the team; its layout
+	# is a Print Format Builder document rather than Jinja, so it is listed but
+	# not edited until someone confirms which PO format is actually in use.
+	{
+		"dt": "Print Format",
+		"filters": [["name", "in", ["MPO Format", "Plate Serial Label", "Plate Purchase Receipt"]]],
+	},
 	{"dt": "Report", "filters": [["module", "=", "Addsol Nl Custom"]]},
 	{"dt": "Role", "filters": [["is_custom", "=", 1]]},
+	{"dt": "Custom DocPerm", "filters": [["role", "=", "Plate Weight Approver"]]},
 	{
 		"dt": "Notification",
 		"filters": [
