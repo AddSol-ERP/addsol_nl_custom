@@ -5,19 +5,24 @@ Two things are wrong on an existing site:
 * ``Item.item_code`` still holds the ``*New*`` placeholder, because the old
   ``item_autoname`` only ever set ``doc.name``. Item links point at the name,
   so the two are out of step.
-* ``Thickness.thickness_mm`` does not exist yet, because the thickness number
-  used to be dug out of the label with a regular expression.
+* ``Thickness.thickness_mm`` is empty, because the thickness number used to be
+  dug out of the label with a regular expression.
 
 Only rows this app owns are touched. Anything that does not match is counted
 and printed so it can be reviewed by hand.
+
+Runs after ``sync_all()``, so ``thickness.json`` has already been synced and
+the ``thickness_mm`` column is already in the database - this patch only fills
+it, it never creates it.
 
 Idempotent.
 """
 
 import frappe
 
-# Item Groups are a tree, so walk it rather than trying to guess the names.
-PLATE_MARKERS = ("custom_thickness_dropdown", "custom_length_mm", "custom_width_mm")
+# An Item Group carrying a weight formula makes every Item under it a weighed
+# item. That, rather than any flag, is what identifies the plate items here.
+PLATE_GROUP_WHERE = "ifnull(g.custom_formula, '') != ''"
 
 
 def execute():
@@ -27,60 +32,72 @@ def execute():
 
 def backfill_thickness_mm():
 	"""Fill Thickness.thickness_mm from the existing label."""
-	if not frappe.db.exists("Custom Field", "Thickness-thickness_mm"):
-		# The field has not reached the database yet. It arrives with the
-		# DocType on the same migrate that runs this patch, but stay safe.
-		frappe.db.add_column("Thickness", "thickness_mm", "float")
-		frappe.db.commit()
+	if not frappe.db.has_column("Thickness", "thickness_mm"):
+		frappe.throw(
+			"Thickness.thickness_mm is not in the database yet. It is added by "
+			"sync_all() from thickness.json; if this is the first run, re-run "
+			"bench migrate.",
+			title="Cannot backfill thickness",
+		)
 
-	rows = frappe.get_all(
+	# Read every row rather than filtering in SQL. thickness_mm is a Float and
+	# may be 0 or NULL depending on when the column was added, so a single
+	# "is not set" filter would silently skip everything.
+	records = frappe.get_all(
 		"Thickness",
-		filters={"thickness_mm": ("is", "not set")},
-		fields=["name", "thickness_value"],
-		ignore_ifnull=True,
+		fields=["name", "thickness_value", "thickness_mm"],
+		limit_page_length=0,
 	)
 
-	if not rows:
-		print("Thickness: nothing to backfill.")
+	todo = [row for row in records if not row.thickness_mm]
+
+	if not todo:
+		print("Thickness: thickness_mm already filled in on every record.")
 		return
 
-	for row in rows:
+	from addsol_nl_custom.addsol_nl_custom.doctype.thickness.thickness import Thickness
+
+	filled = 0
+	for row in todo:
 		try:
-			label, number = _split(row.thickness_value)
+			label, number = Thickness.split_thickness(row.thickness_value)
 		except Exception:
 			print(f"Thickness: skipped '{row.name}' - cannot read '{row.thickness_value}'.")
 			continue
 
-		frappe.db.set_value("Thickness", row.name, "thickness_mm", number, update_modified=False)
-		frappe.db.set_value("Thickness", row.name, "thickness_value", label, update_modified=False)
+		frappe.db.set_value(
+			"Thickness",
+			row.name,
+			{"thickness_value": label, "thickness_mm": number},
+			update_modified=False,
+		)
+		filled += 1
 
-	print(f"Thickness: backfilled thickness_mm on {len(rows)} record(s).")
+	print(f"Thickness: filled thickness_mm on {filled} of {len(todo)} record(s).")
 
 
 def backfill_item_code():
-	"""Set item_code = name, but only on the plate items this app created."""
-	plate_items = frappe.get_all(
-		"Item",
-		filters={"name": ["!=", "item_code"]},
-		or_filters=[{marker: ("is", "set")} for marker in PLATE_MARKERS],
-		fields=["name", "item_code", "item_group"],
-		limit_page_length=0,
+	"""Set item_code = name on the plate items this app created."""
+	plate_items = frappe.db.sql(
+		f"""
+		select i.name, i.item_code
+		  from `tabItem` i
+		  inner join `tabItem Group` g on g.name = i.item_group
+		 where i.name != i.item_code
+		   and {PLATE_GROUP_WHERE}
+		""",
+		as_dict=True,
 	)
 
 	for item in plate_items:
 		frappe.db.set_value("Item", item.name, "item_code", item.name, update_modified=False)
 		print(f"Item: {item.name} - item_code '{item.item_code}' set to the item name.")
 
-	skipped = frappe.db.count("Item", {"name": ["!=", "item_code"]}) - len(plate_items)
-	if skipped:
+	total_mismatched = frappe.db.sql("select count(*) from `tabItem` where name != item_code")[0][0]
+
+	if total_mismatched:
 		print(
-			f"Item: {skipped} other item(s) still have item_code != name. They are not plate "
-			"items, so they were left alone. Review them by hand if you need to."
+			f"Item: {total_mismatched} item(s) still have item_code != name "
+			"({len(plate_items)} of them plate items, which were just fixed). The rest are "
+			"not plate items and were left alone. Review them by hand if you need to."
 		)
-
-
-def _split(value):
-	"""Reuse the Thickness normalisation so the patch and the DocType agree."""
-	from addsol_nl_custom.addsol_nl_custom.doctype.thickness.thickness import Thickness
-
-	return Thickness.split_thickness(value)
