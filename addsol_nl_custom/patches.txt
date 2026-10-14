@@ -6,6 +6,5 @@
 # Patches added in this section will be executed after doctypes are migrated
 addsol_nl_custom.patches.v1_0.cleanup_legacy_plate_customizations
 addsol_nl_custom.patches.v1_0.backfill_plate_item_data
-addsol_nl_custom.patches.v1_0.set_plate_field_order
 addsol_nl_custom.patches.v1_0.setup_plate_defaults
 addsol_nl_custom.patches.v1_0.add_plate_columns_to_mpo_format

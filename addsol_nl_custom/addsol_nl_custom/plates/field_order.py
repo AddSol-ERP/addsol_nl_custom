@@ -7,6 +7,19 @@ the Purchase Order form would arrive with nothing on it but the weight columns.
 This reads the live metadata instead: take whatever order the DocType already
 resolves to, and append the plate fields to it. Anything already present is
 left where it is, so running this twice is a no-op.
+
+This runs from the after_migrate hook, not from a patch, and that ordering is
+deliberate. bench migrate is:
+
+    sync_all()                       DocTypes created
+    post_model_sync patches          our patches
+    sync_fixtures()                  Custom Fields imported
+    after_migrate hooks
+
+A patch would run before the Custom Fields exist, find them missing, skip
+everything and record itself as done - and never be retried. after_migrate is
+the first point at which the fields are actually there, and being a hook it
+re-checks on every migrate rather than once.
 """
 
 import json
@@ -68,7 +81,8 @@ FIELD_ORDER = {
 }
 
 
-def execute():
+def after_migrate():
+	"""Entry point from hooks.py. Runs after fixtures, on every migrate."""
 	for doctype, custom_fields in FIELD_ORDER.items():
 		apply_field_order(doctype, custom_fields)
 

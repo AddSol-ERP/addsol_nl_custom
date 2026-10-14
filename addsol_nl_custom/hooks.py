@@ -86,6 +86,11 @@ doctype_js = {
 # 	"filters": "addsol_nl_custom.utils.jinja_filters"
 # }
 
+# after_migrate, not a patch: the field order has to be read after the Custom
+# Fields exist, and a patch runs before sync_fixtures() imports them. See
+# addsol_nl_custom/plates/field_order.py.
+after_migrate = "addsol_nl_custom.addsol_nl_custom.plates.field_order.after_migrate"
+
 # Installation
 # ------------
 
