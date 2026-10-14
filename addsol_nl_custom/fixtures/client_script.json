@@ -2,28 +2,6 @@
  {
   "docstatus": 0,
   "doctype": "Client Script",
-  "dt": "Purchase Receipt",
-  "enabled": 1,
-  "modified": "2026-03-27 10:18:24.927516",
-  "module": "Addsol Nl Custom",
-  "name": "Purchase Reciept Item UOM conversion",
-  "script": "frappe.ui.form.on('Purchase Receipt Item', {\n    qty: function(frm, cdt, cdn) {\n        calculate_conversion(frm, cdt, cdn);\n    },\n    custom_total_stock_qty: function(frm, cdt, cdn) {\n        calculate_conversion(frm, cdt, cdn);\n    },\n    uom: function(frm, cdt, cdn) {\n        calculate_conversion(frm, cdt, cdn);\n    },\n    on_submit: async function(frm) {\n\n        for (let row of frm.doc.items) {\n\n            if (!row.serial_and_batch_bundle || !row.conversion_factor) continue;\n\n            let bundle = await frappe.db.get_doc(\n                'Serial and Batch Bundle',\n                row.serial_and_batch_bundle\n            );\n\n            for (let entry of (bundle.entries || [])) {\n\n                if (entry.batch_no) {\n                    await frappe.db.set_value(\n                        'Batch',\n                        entry.batch_no,\n                        'custom_conversion_factor',\n                        row.conversion_factor\n                    );\n                }\n            }\n        }\n    }\n});\n\nfunction calculate_conversion(frm, cdt, cdn) {\n    let row = locals[cdt][cdn];\n\n    // Only apply when UOM != Stock UOM\n    if (row.uom && row.stock_uom && row.uom !== row.stock_uom) {\n\n        if (row.qty && row.custom_total_stock_qty) {\n            let conversion = flt(row.custom_total_stock_qty / row.qty);\n\n            frappe.model.set_value(cdt, cdn, 'conversion_factor', conversion);\n            frappe.model.set_value(cdt, cdn, 'stock_qty', row.custom_total_stock_qty);\n        }\n    }\n}",
-  "view": "Form"
- },
- {
-  "docstatus": 0,
-  "doctype": "Client Script",
-  "dt": "Stock Entry",
-  "enabled": 1,
-  "modified": "2026-04-01 08:42:42.192404",
-  "module": "Addsol Nl Custom",
-  "name": "Stock Entry — Fetch Conversion from Batch",
-  "script": "frappe.ui.form.on('Stock Entry Detail', {\n    batch_no: apply_conversion,\n    qty: apply_conversion,\n    item_code: apply_conversion\n});\n\nasync function apply_conversion(frm, cdt, cdn) {\n    let row = locals[cdt][cdn];\n\n    if (!row.batch_no || !row.qty) return;\n\n    try {\n        let r = await frappe.db.get_value(\n            'Batch',\n            row.batch_no,\n            'custom_conversion_factor'\n        );\n\n        let conv = r.message.custom_conversion_factor || 1;\n\n        // Set conversion factor\n        await frappe.model.set_value(cdt, cdn, 'conversion_factor', conv);\n\n        // Let ERPNext calculate stock_qty automatically\n        // OR force if needed:\n        await frappe.model.set_value(cdt, cdn, 'stock_qty', row.qty * conv);\n\n    } catch (e) {\n        console.error(e);\n    }\n}\n\nfrappe.ui.form.on('Stock Entry Detail', {\n\trefresh(frm) {\n\t\t// your code here\n\t}\n})\n\nfrappe.ui.form.on('Stock Entry Detail', {\n\trefresh(frm) {\n\t\t// your code here\n\t}\n})",
-  "view": "Form"
- },
- {
-  "docstatus": 0,
-  "doctype": "Client Script",
   "dt": "Employee",
   "enabled": 1,
   "modified": "2026-05-11 10:57:53.839848",

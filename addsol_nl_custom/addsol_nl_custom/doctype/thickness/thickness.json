@@ -8,6 +8,7 @@
  "engine": "InnoDB",
  "field_order": [
   "thickness_value",
+  "thickness_mm",
   "remark"
  ],
  "fields": [
@@ -20,6 +21,14 @@
    "unique": 1
   },
   {
+   "description": "Thickness in mm. Filled in automatically from Thickness Value; every other part of the app reads this, not the label.",
+   "fieldname": "thickness_mm",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Thickness (mm)",
+   "read_only": 1
+  },
+  {
    "fieldname": "remark",
    "fieldtype": "Small Text",
    "label": "Remark"
@@ -27,9 +36,9 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-16 00:00:00.000000",
+ "modified": "2026-10-14 00:00:00.000000",
  "modified_by": "Administrator",
- "module": "Addsol NL Custom",
+ "module": "Addsol Nl Custom",
  "name": "Thickness",
  "naming_rule": "By fieldname",
  "owner": "Administrator",

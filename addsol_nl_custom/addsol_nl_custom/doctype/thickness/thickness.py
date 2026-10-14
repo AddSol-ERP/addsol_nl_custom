@@ -1,51 +1,66 @@
 # Copyright (c) 2026, Your Company and contributors
 # For license information, please see license.txt
 
+import re
+
 import frappe
 from frappe.model.document import Document
-import re
 
 
 class Thickness(Document):
 	def autoname(self):
 		"""Generate autoname using normalized thickness value"""
 		if self.thickness_value:
-			normalized_value = self.normalize_thickness(self.thickness_value)
+			normalized_value, _ = self.split_thickness(self.thickness_value)
 			self.name = normalized_value
 		else:
 			frappe.throw("Thickness Value is required for autoname")
-	
+
 	def validate(self):
-		"""Normalize thickness value to format: <number> mm"""
-		if self.thickness_value:
-			self.thickness_value = self.normalize_thickness(self.thickness_value)
-	
-	@staticmethod
-	def normalize_thickness(value):
+		"""Normalize the label and keep thickness_mm in step with it.
+
+		thickness_mm is the value every other part of the app reads. The label
+		thickness_value stays for people to look at and for existing links.
 		"""
-		Normalize thickness input to standard format: <number> mm
-		Handles inputs like: '4', '04', '110', '4 mm', '4mm', '04mm'
-		Returns: '4 mm', '110 mm', etc.
+		if self.thickness_value:
+			self.thickness_value, self.thickness_mm = self.split_thickness(self.thickness_value)
+
+	@staticmethod
+	def split_thickness(value):
+		"""Turn a thickness input into its display label and its number of mm.
+
+		Handles '4', '04', '4 mm', '4mm', '2.5', ' 4 ', and returns
+		('4 mm', 4) for all of them. The label always reads '<number> mm' and
+		the number never carries a trailing '.0'.
+
+		The only regular expression left here strips the 'mm' unit - the number
+		itself is parsed as a number, not dug out of the text.
 		"""
 		if not value:
-			return value
-		
-		# Convert to string and strip whitespace
-		value = str(value).strip()
-		
-		# Remove 'mm' if present (case insensitive)
-		value_cleaned = re.sub(r'\s*mm\s*$', '', value, flags=re.IGNORECASE).strip()
-		
-		# Extract numeric value
+			return value, None
+
+		# Drop the unit, whatever spacing or casing was used.
+		cleaned = re.sub(r"\s*mm\s*$", "", str(value).strip(), flags=re.IGNORECASE).strip()
+
 		try:
-			# Convert to float first to handle decimals, then to int if it's a whole number
-			numeric_value = float(value_cleaned)
-			
-			# If it's a whole number, convert to int to remove .0
-			if numeric_value.is_integer():
-				numeric_value = int(numeric_value)
-			
-			# Return formatted value
-			return f"{numeric_value} mm"
+			number = float(cleaned)
 		except ValueError:
 			frappe.throw(f"Invalid thickness value: {value}. Please enter a valid number.")
+
+		# 4.0 reads better as 4 in the label.
+		if number.is_integer():
+			number = int(number)
+
+		return f"{number} mm", number
+
+	@staticmethod
+	def normalize_thickness(value):
+		"""Backwards compatible wrapper: just the display label."""
+		label, _ = Thickness.split_thickness(value)
+		return label
+
+	@staticmethod
+	def parse_thickness_mm(value):
+		"""Backwards compatible wrapper: just the number of mm."""
+		_, number = Thickness.split_thickness(value)
+		return number

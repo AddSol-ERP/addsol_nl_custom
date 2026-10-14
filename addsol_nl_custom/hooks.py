@@ -2,7 +2,9 @@ app_name = "addsol_nl_custom"
 app_title = "Addsol Nl Custom"
 app_publisher = "Addition Solutions"
 app_description = "Customization done for N L Electromech"
+# TODO(publisher): replace with the real Addition Solutions contact address.
 app_email = "contact@email.com"
+# Must agree with license.txt, which is MIT.
 app_license = "mit"
 
 # Apps
@@ -48,9 +50,7 @@ app_license = "mit"
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
-doctype_js = {
-    "Item": "public/js/item.js"
-}
+doctype_js = {"Item": "public/js/item.js"}
 
 # Svg Icons
 # ------------------
@@ -142,16 +142,13 @@ doctype_js = {
 # Hook on document methods and events
 
 doc_events = {
-	# "*": {
-	# 	"on_update": "method",
-	# 	"on_cancel": "method",
-	# 	"on_trash": "method"
-	# }
 	"Item": {
-		"autoname": "addsol_nl_custom.addsol_nl_custom.custom.item.item_autoname",
-		"validate": "addsol_nl_custom.addsol_nl_custom.custom.item.item_validate",
-		"on_update": "addsol_nl_custom.addsol_nl_custom.custom.item.item_on_update",
-	}
+		"autoname": "addsol_nl_custom.addsol_nl_custom.plates.item_hooks.item_autoname",
+		"validate": "addsol_nl_custom.addsol_nl_custom.plates.item_hooks.item_validate",
+	},
+	"Item Group": {
+		"validate": "addsol_nl_custom.addsol_nl_custom.plates.item_group_hooks.item_group_validate",
+	},
 }
 
 # Scheduled Tasks
@@ -255,17 +252,80 @@ doc_events = {
 #     {"doctype": "Client Script", "filters": [["name", "in", ["calculate_estimated_weight"]]]}
 # ]
 
+# Fixtures are filtered so this app only manages its own customisations.
+# Anything not matched by a filter here is left alone on the site - Frappe's
+# fixture import upserts the records present in the file and never deletes the
+# records that are missing from it.
+#
+# Workspace was dropped entirely: all 33 records this app used to export were
+# standard ERPNext/Frappe workspaces, none of them built for this customer.
+# The `custom/*.json` files (item.json, item_group.json, item_barcode.json)
+# were deleted for the same reason - they were a second source of truth for
+# Custom Fields that also shipped India Compliance fields. See Part F1.
+
+# DocTypes touched by the MS Plate specification. Used for Property Setters.
+SPEC_DOCTYPES = [
+	"Item",
+	"Item Group",
+	"Thickness",
+	"Supplier",
+	"Batch",
+	"Serial No",
+	"Purchase Order",
+	"Purchase Order Item",
+	"Purchase Receipt",
+	"Purchase Receipt Item",
+	"Purchase Invoice",
+	"Purchase Invoice Item",
+	"Stock Entry",
+	"Stock Entry Detail",
+	"Job Card",
+	"Work Order",
+]
+
 fixtures = [
-    "Custom Field",
-    "Property Setter",
-    "Client Script",
-    "Server Script",
-    "Report",
-    "Print Format",
-    "Workspace",
-    "Role",
-    "Role Profile",
-    "Module Profile",
-    "Workflow",
-    "Notification"
+	{"dt": "Custom Field", "filters": [["fieldname", "like", "custom\\_%"]]},
+	{"dt": "Property Setter", "filters": [["doc_type", "in", SPEC_DOCTYPES]]},
+	# The remaining scripts are the customer's HR scripts, kept after Part A3-A5.
+	{
+		"dt": "Client Script",
+		"filters": [
+			["name", "in", ["Employee Self Service", "Shift Regularization", "Employee File Upload"]]
+		],
+	},
+	{
+		"dt": "Server Script",
+		"filters": [
+			[
+				"name",
+				"in",
+				[
+					"Attendance Request",
+					"Set Biometric ID as employee id",
+					"Componsatory Leave request.",
+					"Profession Tax Setup",
+					"Fetch Shift",
+					"Employee File Upload",
+				],
+			]
+		],
+	},
+	# "IRS 1099 Form" is a standard=No US regional format and is not ours.
+	{"dt": "Print Format", "filters": [["name", "in", ["MPO Format"]]]},
+	# A2 removed "Attendance Register"; "Stock Entry Ledger" is the team's own.
+	{"dt": "Report", "filters": [["module", "=", "Addsol Nl Custom"]]},
+	{"dt": "Role", "filters": [["is_custom", "=", 1]]},
+	{
+		"dt": "Notification",
+		"filters": [
+			[
+				"name",
+				"in",
+				["notification After Submission Of SO", "Material Request Receipt Notification"],
+			]
+		],
+	},
+	"Role Profile",
+	"Module Profile",
+	"Workflow",
 ]
