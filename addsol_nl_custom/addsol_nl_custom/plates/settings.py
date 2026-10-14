@@ -1,19 +1,30 @@
 # Copyright (c) 2026, Your Company and contributors
 # For license information, please see license.txt
 
-"""Reading Plate Settings.
-
-Every field falls back to the value declared as its default in the DocType, so
-the app behaves sensibly on a site where the single record has never been
-opened and saved. `frappe.db.get_single_value` returns None in that case, and a
-None tolerance or a None series would quietly break receiving.
-"""
+"""Read Plate Settings, including DocType defaults for an unsaved record."""
 
 import frappe
 
 
 def get_setting(fieldname, default=None):
-	"""One Plate Settings field, falling back to the DocType default."""
+	"""Read the saved settings record, with legacy single values as fallback.
+
+	Plate Settings is currently a regular DocType, so values saved in its form
+	live in ``tabPlate Settings`` rather than Frappe's ``tabSingles`` table.
+	Prefer that record; retain the single-value lookup for sites with older
+	settings written there by setup patches.
+	"""
+	meta = frappe.get_meta("Plate Settings")
+	if not meta.issingle:
+		rows = frappe.get_all(
+			"Plate Settings",
+			fields=[fieldname],
+			order_by="modified desc",
+			limit_page_length=1,
+		)
+		if rows and rows[0].get(fieldname) is not None:
+			return rows[0].get(fieldname)
+
 	value = frappe.db.get_single_value("Plate Settings", fieldname)
 	if value is not None:
 		return value
