@@ -24,5 +24,9 @@ def execute():
 
 		for column, fieldtype in PARENT_COLUMNS.items():
 			if not frappe.db.has_column(doctype, column):
-				frappe.db.add_column(doctype, column, fieldtype)
+				# Frappe's MariaDBDatabase adapter in this deployment does not
+				# expose add_column; these identifiers come only from constants above.
+				frappe.db.sql(
+					f"ALTER TABLE `tab{doctype}` ADD COLUMN `{column}` {fieldtype}"
+				)
 				print(f"Added missing {column} column to {doctype}")
