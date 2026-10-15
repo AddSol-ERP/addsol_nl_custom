@@ -40,17 +40,20 @@ def get_cutting_operation():
 	return get_setting("cutting_operation")
 
 
-@frappe.whitelist()
+@frappe.whitelist(allow_guest=False)
 def get_plate_settings():
-	"""The read-only parts of Plate Settings the forms need."""
+	"""Return plate-receipt UI capabilities for the signed-in user."""
+	approver_role = get_setting("approver_role")
+	user_roles = frappe.get_roles()
 	return {
 		"weight_tolerance_pct": get_setting("weight_tolerance_pct", 10),
 		"enable_weight_based_purchasing": bool(get_setting("enable_weight_based_purchasing", 0)),
+		"can_decide_weight": not approver_role or approver_role in user_roles,
 		"cutting_operation": get_setting("cutting_operation"),
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(allow_guest=False)
 def is_weight_managed_item(item_code=None):
 	"""Tell the purchase forms whether to show weight pricing for an Item."""
 	if not item_code or not get_setting("enable_weight_based_purchasing", 0):
