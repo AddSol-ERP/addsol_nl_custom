@@ -7,24 +7,8 @@ import frappe
 
 
 def get_setting(fieldname, default=None):
-	"""Read the saved settings record, with legacy single values as fallback.
-
-	Plate Settings is currently a regular DocType, so values saved in its form
-	live in ``tabPlate Settings`` rather than Frappe's ``tabSingles`` table.
-	Prefer that record; retain the single-value lookup for sites with older
-	settings written there by setup patches.
-	"""
+	"""Read the Single DocType values, falling back to field defaults."""
 	meta = frappe.get_meta("Plate Settings")
-	if not meta.issingle:
-		rows = frappe.get_all(
-			"Plate Settings",
-			fields=[fieldname],
-			order_by="modified desc",
-			limit_page_length=1,
-		)
-		if rows and rows[0].get(fieldname) is not None:
-			return rows[0].get(fieldname)
-
 	value = frappe.db.get_single_value("Plate Settings", fieldname)
 	if value is not None:
 		return value
