@@ -206,6 +206,12 @@ def copy_rate_from_order(doc, row) -> None:
 		)
 
 	row.custom_rate_per_kg = order_rate
+	# ERPNext's Purchase Receipt mapper does not always carry custom fields from
+	# the Purchase Order Item. Use the committed PO weight as a fallback before
+	# set_receipt_weights() falls back to Item.weight_per_unit. Preserve a value
+	# already present on the receipt row so an explicit receipt value wins.
+	if not frappe.utils.flt(row.get("custom_unit_weight_kg")):
+		row.custom_unit_weight_kg = frappe.utils.flt(order_row.get("custom_unit_weight_kg"))
 
 
 def linked_order_row(row):
