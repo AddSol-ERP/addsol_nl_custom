@@ -5,9 +5,9 @@ async function update_weight_pricing_flag(frm, cdt, cdn) {
 	const item_code = row.item_code;
 	const result = item_code
 		? await frappe.call({
-			method: "addsol_nl_custom.addsol_nl_custom.plates.api.is_weight_managed_item",
-			args: { item_code },
-		})
+				method: "addsol_nl_custom.addsol_nl_custom.plates.api.is_weight_managed_item",
+				args: { item_code },
+		  })
 		: null;
 	if (locals[cdt][cdn].item_code !== item_code) return;
 
