@@ -7,8 +7,12 @@ import frappe
 
 
 def get_setting(fieldname, default=None):
-	"""Read the Single DocType values, falling back to field defaults."""
-	meta = frappe.get_meta("Plate Settings")
+	"""Read the Single DocType values, falling back to field defaults.
+
+	The fallback matters: a Single DocType row does not exist until somebody
+	opens and saves the form, and a None tolerance or a None series would
+	quietly break receiving.
+	"""
 	value = frappe.db.get_single_value("Plate Settings", fieldname)
 	if value is not None:
 		return value

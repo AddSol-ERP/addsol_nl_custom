@@ -8,7 +8,6 @@ existing site's schema sync did not add.
 
 import frappe
 
-
 CHILD_TABLES = ("Supplier Grade Rate", "Plate Cutting Offcut")
 PARENT_COLUMNS = {
 	"parent": "varchar(140)",
@@ -26,7 +25,5 @@ def execute():
 			if not frappe.db.has_column(doctype, column):
 				# Frappe's MariaDBDatabase adapter in this deployment does not
 				# expose add_column; these identifiers come only from constants above.
-				frappe.db.sql(
-					f"ALTER TABLE `tab{doctype}` ADD COLUMN `{column}` {fieldtype}"
-				)
+				frappe.db.sql(f"ALTER TABLE `tab{doctype}` ADD COLUMN `{column}` {fieldtype}")
 				print(f"Added missing {column} column to {doctype}")

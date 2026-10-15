@@ -302,3 +302,57 @@ class TestFixtures(unittest.TestCase):
 					{"Item", "Item Group", "Batch", "Purchase Receipt Item"},
 					f"{record['doc_type']} has a field_order setter this app must not create",
 				)
+
+
+class TestFrappeApiUsage(unittest.TestCase):
+	"""Arguments that only exist on get_all / the query builder.
+
+	frappe.db.sql takes (query, values, ...) and nothing else useful. Passing
+	it limit_page_length or pluck raises TypeError at runtime, which is how the
+	Plate Stock Register died the first time it was opened.
+	"""
+
+	QUERY_BUILDER_ONLY = frozenset(
+		{
+			"limit_page_length",
+			"pluck",
+			"cache",
+			"update",
+			"ignore_ifnull",
+			"order_by",
+			"fields",
+			"filters",
+			"group_by",
+		}
+	)
+
+	def app_python_files(self):
+		for path in glob.glob(os.path.join(MODULE_DIR, "**", "*.py"), recursive=True):
+			if "__pycache__" in path:
+				continue
+			yield path
+		for path in glob.glob(os.path.join(APP_DIR, "patches", "**", "*.py"), recursive=True):
+			if "__pycache__" in path:
+				continue
+			yield path
+
+	def test_no_query_builder_arguments_reach_frappe_db_sql(self):
+		import ast
+
+		offenders = []
+		for path in self.app_python_files():
+			tree = ast.parse(open(path).read())
+			for node in ast.walk(tree):
+				if not isinstance(node, ast.Call):
+					continue
+				func = node.func
+				if not (isinstance(func, ast.Attribute) and func.attr == "sql"):
+					continue
+				source = ast.unparse(func)
+				if "db.sql" not in source and not source.endswith(".sql"):
+					continue
+				bad = {k.arg for k in node.keywords if k.arg} & self.QUERY_BUILDER_ONLY
+				if bad:
+					offenders.append(f"{os.path.relpath(path, APP_DIR)}:{node.lineno} {sorted(bad)}")
+
+		self.assertEqual(offenders, [], "frappe.db.sql got query-builder arguments: " + "; ".join(offenders))

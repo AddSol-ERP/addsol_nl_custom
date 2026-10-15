@@ -174,7 +174,6 @@ def active_serials(filters) -> list:
 		 order by s.name
 		""",
 		as_dict=True,
-		limit_page_length=0,
 	)
 
 

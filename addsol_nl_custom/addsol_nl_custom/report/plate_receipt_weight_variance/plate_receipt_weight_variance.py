@@ -105,7 +105,6 @@ def fetch_rows(filters):
 		 order by pr.posting_date, pri.parent, pri.idx
 		""",
 		as_dict=True,
-		limit_page_length=0,
 	)
 
 

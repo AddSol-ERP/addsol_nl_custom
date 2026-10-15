@@ -2,7 +2,6 @@
 
 import frappe
 
-
 LAYOUT_FIELD_TYPES = {
 	"Section Break",
 	"Column Break",
