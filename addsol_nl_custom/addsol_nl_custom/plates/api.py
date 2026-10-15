@@ -62,3 +62,19 @@ def is_weight_managed_item(item_code=None):
 	from addsol_nl_custom.addsol_nl_custom.plates.grouping import is_weighed_item
 
 	return bool(is_weighed_item(item_code))
+
+
+@frappe.whitelist(allow_guest=False)
+def get_last_rate(item_code=None, supplier=None) -> float:
+	"""Offer the last rate per kg agreed for an Item when a line is still empty.
+
+	Only ever a starting point. The desk calls this as the buyer picks an item
+	or a supplier, and the client is written to fill the field only when it has
+	not been typed into - a rate somebody entered is never replaced by this.
+	"""
+	if not item_code:
+		return 0.0
+
+	from addsol_nl_custom.addsol_nl_custom.plates.rate_history import last_rate
+
+	return last_rate(item_code, supplier)

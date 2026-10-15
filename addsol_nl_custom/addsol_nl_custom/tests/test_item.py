@@ -18,7 +18,7 @@ GROUP = "MS Plate 250 Test"
 THICKNESS = "10 mm"
 
 
-def make_group(group_name=GROUP, mf=0.785, formula=THREE_D_FORMULA):
+def make_group(group_name=GROUP, mf=0.785, formula=THREE_D_FORMULA, weighed=True):
 	if frappe.db.exists("Item Group", group_name):
 		frappe.delete_doc("Item Group", group_name, force=True, ignore_missing=True)
 
@@ -28,6 +28,7 @@ def make_group(group_name=GROUP, mf=0.785, formula=THREE_D_FORMULA):
 			"item_group_name": group_name,
 			"parent_item_group": "All Item Groups",
 			"is_group": 0,
+			"custom_is_weighed_grade": 1 if weighed else 0,
 			"custom_multiplication_factor": mf,
 			"custom_formula": formula,
 			"custom_batch_number_series": "PLB-.YY.-.#####",
@@ -111,7 +112,7 @@ class TestPlateItem(FrappeTestCase):
 		self.assertEqual(reloaded.batch_number_series, "MY-OWN-.#####")
 
 	def test_an_item_under_a_plain_group_is_left_alone(self):
-		make_group("Plain Consumable Group", mf=None, formula=None)
+		make_group("Plain Consumable Group", mf=None, formula=None, weighed=False)
 		item = frappe.get_doc(
 			{
 				"doctype": "Item",

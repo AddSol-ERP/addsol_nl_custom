@@ -39,16 +39,20 @@ FIELD_SPECS = [
 	  "description": "Offcuts narrower than this must be booked as scrap. See Minimum "
 	                 "Offcut Length. Falls back to Plate Settings when blank."}),
 
-	# ------------------------------------------------------------- C2 Supplier
-	("Supplier", "custom_grade_rates", "Table", "Grade Rates (per Kg)", "Supplier Grade Rate",
-	 {"description": "One row per grade this supplier sells. A Purchase Order reads the "
-	                 "rate from here and fixes it."}),
+	# ------------------------------------------------------------- C2 Grade opt-in
+	("Item Group", "custom_is_weighed_grade", "Check", "Is Weighed Grade", None,
+	 {"default": 0, "description": "Opt in. Only a grade ticked here gets plate weights, "
+	                 "Nos enforcement, heat numbers, serial and batch stamping, and a "
+	                 "rate per kg. A Formula on its own no longer makes a grade a "
+	                 "weighed grade, so an unticked grade is an ordinary group."}),
 
 	# ---------------------------------------------- C4 Purchase Order / Item
 	("Purchase Order Item", "custom_is_plate", "Check", "Is Plate", None,
 	 {"read_only": 1, "hidden": 1, "print_hide": 1}),
 	("Purchase Order Item", "custom_rate_per_kg", "Currency", "Rate per Kg", "currency",
-	 {"read_only": 1, "precision": "4", "depends_on": "eval:doc.custom_is_plate"}),
+	 {"read_only": 0, "in_list_view": 1, "precision": "4", "depends_on": "eval:doc.custom_is_plate",
+	  "description": "Entered by the buyer. Nothing overwrites it; an empty line is offered "
+	                 "the last rate agreed for this item."}),
 	("Purchase Order Item", "custom_unit_weight_kg", "Float", "Theoretical Wt per Plate (Kg)", None,
 	 {"read_only": 1, "precision": "3", "depends_on": "eval:doc.custom_is_plate",
 	  "fetch_from": "item_code.weight_per_unit", "fetch_if_empty": 1}),
@@ -62,7 +66,8 @@ FIELD_SPECS = [
 	("Purchase Receipt Item", "custom_is_plate", "Check", "Is Plate", None,
 	 {"read_only": 1, "hidden": 1, "print_hide": 1}),
 	("Purchase Receipt Item", "custom_rate_per_kg", "Currency", "Rate per Kg", "currency",
-	 {"read_only": 1, "precision": "4", "depends_on": "eval:doc.custom_is_plate"}),
+	 {"read_only": 1, "in_list_view": 1, "precision": "4", "depends_on": "eval:doc.custom_is_plate",
+	  "description": "Taken from the Purchase Order line. It is not typed here."}),
 	("Purchase Receipt Item", "custom_unit_weight_kg", "Float", "Theoretical Wt per Plate (Kg)", None,
 	 {"read_only": 1, "precision": "3", "depends_on": "eval:doc.custom_is_plate",
 	  "fetch_from": "item_code.weight_per_unit", "fetch_if_empty": 1}),
@@ -83,7 +88,7 @@ FIELD_SPECS = [
 	  "description": "Only shown when the variance is above tolerance. Permlevel 1, so only "
 	                 "the approver role may set it."}),
 	("Purchase Receipt Item", "custom_billable_weight_kg", "Float", "Accepted Weight (Kg)", None,
-	 {"read_only": 1, "precision": "3", "depends_on": "eval:doc.custom_is_plate"}),
+	 {"read_only": 1, "in_list_view": 1, "precision": "3", "depends_on": "eval:doc.custom_is_plate"}),
 	("Purchase Receipt Item", "custom_weight_per_plate_kg", "Float", "Weight per Plate (Kg)", None,
 	 {"read_only": 1, "precision": "3", "depends_on": "eval:doc.custom_is_plate"}),
 	("Purchase Receipt Item", "custom_heat_number", "Data", "Heat Number", None,
@@ -135,16 +140,16 @@ FIELD_SPECS = [
 INSERT_AFTER = {
 	("Item", "custom_is_offcut"): "custom_width_mm",
 	("Item", "custom_source_item"): "custom_is_offcut",
+	("Item Group", "custom_is_weighed_grade"): "custom_formula",
 	("Item Group", "custom_min_offcut_length_mm"): "custom_serial_no_series",
 	("Item Group", "custom_min_offcut_width_mm"): "custom_min_offcut_length_mm",
-	("Supplier", "custom_grade_rates"): "default_price_list",
 	("Purchase Order Item", "custom_is_plate"): "rate",
-	("Purchase Order Item", "custom_rate_per_kg"): "custom_is_plate",
+	("Purchase Order Item", "custom_rate_per_kg"): "qty",
 	("Purchase Order Item", "custom_unit_weight_kg"): "custom_rate_per_kg",
 	("Purchase Order Item", "custom_est_weight_kg"): "custom_unit_weight_kg",
 	("Purchase Order", "custom_total_est_weight_kg"): "total_net_weight",
 	("Purchase Receipt Item", "custom_is_plate"): "rate",
-	("Purchase Receipt Item", "custom_rate_per_kg"): "custom_is_plate",
+	("Purchase Receipt Item", "custom_rate_per_kg"): "rate",
 	("Purchase Receipt Item", "custom_unit_weight_kg"): "custom_rate_per_kg",
 	("Purchase Receipt Item", "custom_est_weight_kg"): "custom_unit_weight_kg",
 	("Purchase Receipt Item", "custom_supplier_weight_kg"): "custom_est_weight_kg",
@@ -173,6 +178,14 @@ INSERT_AFTER = {
 	("Serial No", "custom_weight_kg"): "batch_no",
 	("Serial No", "custom_heat_number"): "custom_weight_kg",
 	("Serial No", "custom_source_serial_no"): "custom_heat_number",
+}
+
+# Fields this app shipped once and must never come back. Taking a row out of
+# FIELD_SPECS is not enough to drop one: main() carries every field it does not
+# manage over from the existing fixture, so a removed row would be preserved
+# forever. This list is the only thing that actually deletes it.
+REMOVED = {
+	("Supplier", "custom_grade_rates"),
 }
 
 BOOLEAN_KEYS = {
@@ -239,8 +252,10 @@ def main():
 	managed = {(dt, fn) for dt, fn, *_ in FIELD_SPECS}
 
 	kept = [
-		f for f in existing
-		if (f["dt"], f["fieldname"]) in hand_tuned or (f["dt"], f["fieldname"]) not in managed
+		f
+		for f in existing
+		if (f["dt"], f["fieldname"]) not in REMOVED
+		and ((f["dt"], f["fieldname"]) in hand_tuned or (f["dt"], f["fieldname"]) not in managed)
 	]
 	kept.extend(build_field(*spec) for spec in FIELD_SPECS)
 	kept.sort(key=lambda f: (f["dt"], f["fieldname"]))

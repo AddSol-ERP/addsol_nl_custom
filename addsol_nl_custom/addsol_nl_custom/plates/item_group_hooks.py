@@ -7,26 +7,30 @@ from addsol_nl_custom.addsol_nl_custom.plates.weight import formula_variables
 
 
 def item_group_validate(doc, method):
-	"""Check a weighed Item Group before it is saved.
+	"""Check a grade that has opted in before it is saved.
 
-	An Item Group with no formula is an ordinary group and is left alone. Once
-	a formula is there it has to be safe arithmetic over the allowed names, and
-	the multiplication factor has to be a real number, because every Item under
-	the group will be valued with the two of them.
-
-	Progressive setup stays possible: a group can be created first and given its
-	formula later.
+	Only a group with the weighed grade flag on has to be usable. An unticked
+	group can carry a half-finished formula while it is being set up, which
+	keeps progressive setup possible; ticking the flag is the moment the
+	formula and the multiplication factor have to be real, because from then on
+	every Item under the group is valued with them.
 	"""
-	if not doc.get("custom_formula"):
+	if not doc.get("custom_is_weighed_grade"):
 		return
+
+	if not doc.get("custom_formula"):
+		frappe.throw(
+			frappe._("Item Group {0} is marked as a weighed grade, so it needs a Formula.").format(doc.name),
+			title=frappe._("Invalid weight formula"),
+		)
 
 	formula_variables(doc.custom_formula)
 
-	mf = frappe.utils.flt(doc.get("custom_multiplication_factor"))
-	if mf <= 0:
+	if frappe.utils.flt(doc.get("custom_multiplication_factor")) <= 0:
 		frappe.throw(
 			frappe._(
-				"Item Group {0} has a Formula, so its Multiplication Factor (MF) must be greater than 0."
+				"Item Group {0} is marked as a weighed grade, so its Multiplication Factor (MF) "
+				"must be greater than 0."
 			).format(doc.name),
 			title=frappe._("Invalid weight formula"),
 		)

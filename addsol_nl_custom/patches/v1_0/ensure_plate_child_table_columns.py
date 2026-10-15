@@ -1,14 +1,18 @@
 """Repair child-table links if a DocType was first installed as a regular table.
 
-Supplier Grade Rate and Plate Cutting Offcut were initially shipped without
-``istable``. Once marked as child tables, Frappe metadata expects the standard
-parent link columns. This post-model-sync patch fills any columns that an
-existing site's schema sync did not add.
+Plate Cutting Offcut was initially shipped without ``istable``. Once marked as a
+child table, Frappe metadata expects the standard parent link columns. This
+post-model-sync patch fills any columns that an existing site's schema sync did
+not add.
+
+The name of a DocType that no longer exists is left alone on purpose: the table
+is dropped by drop_supplier_grade_rates, and this patch may still run on a site
+where the drop has happened but the table has not been cleaned up yet.
 """
 
 import frappe
 
-CHILD_TABLES = ("Supplier Grade Rate", "Plate Cutting Offcut")
+CHILD_TABLES = ("Plate Cutting Offcut",)
 PARENT_COLUMNS = {
 	"parent": "varchar(140)",
 	"parenttype": "varchar(140)",

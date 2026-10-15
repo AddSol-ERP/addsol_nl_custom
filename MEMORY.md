@@ -19,15 +19,28 @@ source of truth.
 
 - Weight formulas are limited to `L`, `W`, `T`, and `MF`; `custom_formula` is
   not a valid variable inside a weight formula.
-- Per-kg pricing may be sourced from supplier/item defaults, but a Purchase
-  Order line can carry an edited rate. Receipt logic must preserve the actual
-  transaction's rate and weight data.
+- An Item Group is a weighed grade only when `Item Group.custom_is_weighed_grade`
+  is ticked. A Formula alone does not make one, because that made every graded
+  Item demand a rate per kg. The flag gates all plate behaviour, so an unticked
+  grade is an ordinary group.
+- The rate per kg is entered on the Purchase Order line and nothing overwrites
+  it. `plates/rate_history.py` offers the last submitted rate for that item
+  (preferring this supplier, falling back to any) purely to fill an empty line.
+  A receipt is priced at the order's rate; its field is read-only.
+- There is no supplier price list. `Supplier Grade Rate` was removed along with
+  the per-supplier validity windows; it tied the price to the supplier's record
+  and overwrote the buyer's figure on every items-grid change.
 - Keep weight tolerance, over-billing allowance, approval roles, cutting
   operation, and offcut settings in Plate Settings unless the data is truly an
   item-specific property.
 - API lookups that control UI behavior must not expose data to guests. The
   backend must still enforce item eligibility, permissions, tolerance, and
   approval decisions when documents are saved or submitted.
+- `tools/generate_plate_custom_fields.py` is the source of truth for the plate
+  Custom Fields. Edit it and re-run it; never hand-edit `custom_field.json`.
+  Removing a row is not enough to drop a field, because the generator carries
+  unmanaged fields over from the existing fixture - the `REMOVED` set is what
+  actually deletes one.
 
 ## Script Reports
 
@@ -61,3 +74,20 @@ lived only in app modules. Both report JSON files now mark them standard, and a
 post-model-sync patch upgrades existing database records. The fix was pushed to
 `main` in commits `19f6746` and `e0f0789`; the latter includes the plate API
 capability response used by the React receipt UI.
+
+## Blank rows in Plate Stock Register (2026-10-15)
+
+Commit `8212e08`. Two causes, neither in the report:
+
+- `receipt_meta` gated the whole stamp on `row.custom_is_plate`, which is set
+  from the Item Group being weighed, so a line carrying a heat number was
+  skipped and the number went nowhere without a message.
+- cost per kg was read only from `custom_rate_per_kg`, which `purchase.py` only
+  writes when weight-based purchasing is enabled - so with the flag off, as it
+  correctly is before go-live, stock value and value per kg were always blank.
+
+Heat number and MTC are now stamped whatever the item's grade says, and weight
+and cost per kg are derived from the line's own rate. `update_batch` skips
+values it does not have instead of writing zeros, and every "nothing stamped"
+path prints a reason. `backfill_batch_metadata` re-stamps receipts already
+submitted, because the live hook only runs on submit.

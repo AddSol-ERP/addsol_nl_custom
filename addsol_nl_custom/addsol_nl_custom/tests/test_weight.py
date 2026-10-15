@@ -10,8 +10,13 @@ from addsol_nl_custom.addsol_nl_custom.plates.weight import compute_theoretical_
 THREE_D_FORMULA = "(L * W * T * MF) / 100000"
 
 
-def make_plate_group(group_name, mf=None, formula=None, is_group=0):
-	"""Create (or reset) a weighed Item Group for a test."""
+def make_plate_group(group_name, mf=None, formula=None, is_group=0, weighed=True):
+	"""Create (or reset) a weighed Item Group for a test.
+
+	`weighed` sets the opt-in flag, and that flag is what makes a grade a
+	weighed grade at all. Pass False for a grade that is being built up and has
+	not opted in yet.
+	"""
 	if frappe.db.exists("Item Group", group_name):
 		frappe.delete_doc("Item Group", group_name, force=True, ignore_missing=True)
 
@@ -21,6 +26,7 @@ def make_plate_group(group_name, mf=None, formula=None, is_group=0):
 			"item_group_name": group_name,
 			"parent_item_group": "All Item Groups",
 			"is_group": is_group,
+			"custom_is_weighed_grade": 1 if weighed else 0,
 			"custom_multiplication_factor": mf,
 			"custom_formula": formula,
 		}
@@ -30,7 +36,7 @@ def make_plate_group(group_name, mf=None, formula=None, is_group=0):
 
 
 class TestItemGroup(FrappeTestCase):
-	"""Part B6 - a weighed group has to be usable before Items point at it."""
+	"""Part B6 - a weighed grade has to opt in, and be usable once it has."""
 
 	def setUp(self):
 		super().setUp()
@@ -39,9 +45,25 @@ class TestItemGroup(FrappeTestCase):
 	def test_a_good_formula_is_accepted(self):
 		self.assertTrue(is_weighed_group(self.group))
 
+	def test_a_formula_alone_does_not_make_a_weighed_grade(self):
+		# The opt-in is explicit. A group carrying a Formula is still an ordinary
+		# group until the flag is ticked, so no rate per kg is demanded of it.
+		group = make_plate_group("Formula No Flag", 0.785, THREE_D_FORMULA, weighed=False)
+		self.assertFalse(is_weighed_group(group))
+
+	def test_opting_in_without_a_formula_is_rejected(self):
+		with self.assertRaises(frappe.ValidationError):
+			make_plate_group("Flagged No Formula", None, None)
+
+	def test_an_unticked_grade_may_carry_a_half_finished_formula(self):
+		# This used to be refused outright. Only a grade that has opted in has to
+		# be usable, so a formula can be entered before the flag is ticked.
+		group = make_plate_group("Draft Formula", None, THREE_D_FORMULA, weighed=False)
+		self.assertFalse(is_weighed_group(group))
+
 	def test_a_group_without_a_formula_is_left_alone(self):
-		# Progressive setup: the group can exist before its formula is filled in.
-		group = make_plate_group("Plain Group", None, None)
+		# Progressive setup: the group can exist before it opts in.
+		group = make_plate_group("Plain Group", None, None, weighed=False)
 		self.assertFalse(is_weighed_group(group))
 
 	def test_a_formula_with_a_bad_multiplication_factor_is_rejected(self):
@@ -98,13 +120,15 @@ class TestComputeTheoreticalWeight(FrappeTestCase):
 
 	def test_missing_or_non_positive_multiplication_factor(self):
 		for mf in (None, 0, -1):
-			group = make_plate_group(f"MF {mf}", mf, THREE_D_FORMULA)
+			# weighed=False so the half-configured group can exist at all; the
+			# point of this test is what the weight calculation makes of it.
+			group = make_plate_group(f"MF {mf}", mf, THREE_D_FORMULA, weighed=False)
 			with self.subTest(mf=mf):
 				with self.assertRaises(frappe.ValidationError):
 					compute_theoretical_weight(group, 10, 2500, 1250)
 
 	def test_missing_formula(self):
-		group = make_plate_group("No Formula Group", 0.785, None)
+		group = make_plate_group("No Formula Group", 0.785, None, weighed=False)
 		with self.assertRaises(frappe.ValidationError):
 			compute_theoretical_weight(group, 10, 2500, 1250)
 

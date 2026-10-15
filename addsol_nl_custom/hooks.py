@@ -154,9 +154,6 @@ doc_events = {
 	"Item Group": {
 		"validate": "addsol_nl_custom.addsol_nl_custom.plates.item_group_hooks.item_group_validate",
 	},
-	"Supplier": {
-		"validate": "addsol_nl_custom.addsol_nl_custom.plates.supplier_rates.check_no_overlap",
-	},
 	# Part D. All three of these stand down while Plate Settings'
 	# enable_weight_based_purchasing is off, so they cannot move money on a
 	# half-finished deployment.

@@ -16,6 +16,7 @@ import frappe
 from frappe import _
 
 from addsol_nl_custom.addsol_nl_custom.plates.grouping import is_weighed_item
+from addsol_nl_custom.addsol_nl_custom.plates.rate_history import last_rate
 from addsol_nl_custom.addsol_nl_custom.plates.settings import get_setting, is_enabled
 from addsol_nl_custom.addsol_nl_custom.plates.utils import round_half_up
 
@@ -145,29 +146,22 @@ def set_po_weights(doc, row) -> None:
 
 
 def set_po_rate(doc, row) -> None:
-	"""The rate per kg comes from the supplier's grade table and is fixed here."""
-	if not row.get("custom_rate_per_kg") or row.get("items_changed"):
-		row.custom_rate_per_kg = lookup_supplier_rate(doc, row)
+	"""The rate per kg is the buyer's to enter, and nothing here overwrites it.
+
+	When the line is still empty we hand it the last rate agreed for this item,
+	so a repeat order does not start from nothing. A figure someone typed is
+	left exactly as it is, including when the items grid is edited again.
+	"""
+	if not row.get("custom_rate_per_kg"):
+		row.custom_rate_per_kg = last_rate(row.get("item_code"), doc.get("supplier"))
 
 	if not row.get("custom_rate_per_kg"):
 		frappe.throw(
-			_(
-				"Row {0} of {1}: no rate per kg for {2}. Add it to this supplier's Grade Rates, "
-				"or type it on the line."
-			).format(row.idx, doc.name, row.get("item_group") or row.get("item_code")),
+			_("Row {0} of {1}: enter a rate per kg for {2}.").format(row.idx, doc.name, row.get("item_code")),
 			title=_("No rate per kg"),
 		)
 
 	apply_amount(doc, row, frappe.utils.flt(row.get("custom_est_weight_kg")))
-
-
-def lookup_supplier_rate(doc, row):
-	"""The supplier's rate for this grade, valid on the order's date."""
-	from addsol_nl_custom.addsol_nl_custom.plates.supplier_rates import find_rate
-
-	return find_rate(
-		doc.get("supplier"), row.get("item_group"), doc.get("transaction_date") or doc.get("schedule_date")
-	)
 
 
 # ---------------------------------------------------------- Purchase Receipt
@@ -194,27 +188,21 @@ def pr_before_validate(doc, method=None) -> None:
 
 
 def copy_rate_from_order(doc, row) -> None:
-	"""The rate per kg was fixed at the order and must not drift."""
+	"""A receipt is priced at the rate the order agreed.
+
+	The rate per kg is not typed on a receipt, so there is nothing to reconcile:
+	the order's figure simply stands. If the order line has no rate at all that
+	is a gap in the order, and it is worth saying so.
+	"""
 	order_row = linked_order_row(row)
 	if not order_row:
 		return
 
 	order_rate = frappe.utils.flt(order_row.get("custom_rate_per_kg"))
-	line_rate = frappe.utils.flt(row.get("custom_rate_per_kg"))
-
 	if not order_rate:
 		frappe.throw(
 			_("Row {0} of {1} links to a Purchase Order line with no rate per kg.").format(row.idx, doc.name),
 			title=_("No rate per kg on the order"),
-		)
-
-	if line_rate and abs(line_rate - order_rate) > 0.0001:
-		frappe.throw(
-			_(
-				"Row {0} of {1}: the rate per kg is {2} but the Purchase Order fixed it at {3}. "
-				"The rate is agreed at the order and does not change on receipt."
-			).format(row.idx, doc.name, line_rate, order_rate),
-			title=_("Rate per kg does not match the order"),
 		)
 
 	row.custom_rate_per_kg = order_rate
