@@ -67,11 +67,11 @@ def build_rows(filters) -> list[dict]:
 
 	grouped = {}
 	for serial in rows:
-		key = (serial.item, serial.warehouse, serial.batch_no)
+		key = (serial.item_code, serial.warehouse, serial.batch_no)
 		group = grouped.setdefault(
 			key,
 			{
-				"item": serial.item,
+				"item": serial.item_code,
 				"warehouse": serial.warehouse,
 				"batch": serial.batch_no,
 				"plates": 0,
@@ -144,11 +144,15 @@ def active_serials(filters) -> list:
 
 	Stock is counted by active serial, which is what makes this report agree
 	with Stock Balance rather than with every serial ever made.
+
+	Note the column name: Serial No links to Item through `item_code`, not
+	`item`. Batch uses `item`. Getting them the wrong way round fails only when
+	the report is opened.
 	"""
 	conditions = ["s.status = 'Active'"]
 
 	for fieldname, column in (
-		("item", "s.item"),
+		("item", "s.item_code"),
 		("warehouse", "s.warehouse"),
 		("batch", "s.batch_no"),
 		("thickness", "i.custom_thickness_dropdown"),
@@ -166,9 +170,9 @@ def active_serials(filters) -> list:
 
 	return frappe.db.sql(
 		f"""
-		select s.name, s.item, s.warehouse, s.batch_no, s.custom_weight_kg
+		select s.name, s.item_code, s.warehouse, s.batch_no, s.custom_weight_kg
 		  from `tabSerial No` s
-		  left join `tabItem` i on i.name = s.item
+		  left join `tabItem` i on i.name = s.item_code
 		  left join `tabBatch` b on b.name = s.batch_no
 		 where {where}
 		 order by s.name

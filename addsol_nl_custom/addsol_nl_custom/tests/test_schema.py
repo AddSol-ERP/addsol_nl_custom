@@ -356,3 +356,103 @@ class TestFrappeApiUsage(unittest.TestCase):
 					offenders.append(f"{os.path.relpath(path, APP_DIR)}:{node.lineno} {sorted(bad)}")
 
 		self.assertEqual(offenders, [], "frappe.db.sql got query-builder arguments: " + "; ".join(offenders))
+
+
+class TestStockFieldNames(unittest.TestCase):
+	"""Column names on the stock tables, which are not all what you would guess.
+
+	Serial No links to Item through `item_code`. Batch links through `item`.
+	They read alike and are not interchangeable, and a wrong one only fails when
+	the code runs - which is how Plate Stock Register died with
+	"Unknown column 's.item' in 'SELECT'".
+	"""
+
+	# From erpnext/stock/doctype/serial_no/serial_no.json at version-15.
+	SERIAL_NO_FIELDS = frozenset(
+		{
+			"name",
+			"status",
+			"owner",
+			"creation",
+			"modified",
+			"docstatus",
+			"serial_no",
+			"item_code",
+			"item_name",
+			"item_group",
+			"brand",
+			"asset",
+			"location",
+			"employee",
+			"warranty_expiry_date",
+			"amc_expiry_date",
+			"company",
+			"work_order",
+			"warehouse",
+			"batch_no",
+			"purchase_document_no",
+			"customer",
+			"description",
+			"custom_weight_kg",
+			"custom_heat_number",
+			"custom_source_serial_no",
+		}
+	)
+
+	def test_serial_no_has_item_code_not_item(self):
+		self.assertIn("item_code", self.SERIAL_NO_FIELDS)
+		self.assertNotIn("item", self.SERIAL_NO_FIELDS)
+
+	def app_sources(self):
+		for path in glob.glob(os.path.join(MODULE_DIR, "**", "*.py"), recursive=True):
+			if "__pycache__" not in path:
+				yield path
+		for path in glob.glob(os.path.join(APP_DIR, "patches", "**", "*.py"), recursive=True):
+			if "__pycache__" not in path:
+				yield path
+
+	def test_no_code_asks_serial_no_for_an_item_field(self):
+		"""Nothing may read serial.item or the s.item SQL alias."""
+		import ast
+		import re
+
+		offenders = []
+
+		this_file = os.path.abspath(__file__)
+
+		for path in self.app_sources():
+			if os.path.abspath(path) == this_file:
+				# The check describes the mistake in its own docstring.
+				continue
+			source = open(path).read()
+			for match in re.finditer(r"\b(?:serial|s)\.(item)\b(?!_)", source):
+				line = source[: match.start()].count("\n") + 1
+				offenders.append(f"{os.path.relpath(path, APP_DIR)}:{line} {'.' + match.group(1)}")
+
+			tree = ast.parse(source)
+			for node in ast.walk(tree):
+				if not isinstance(node, ast.Call):
+					continue
+				# frappe.db.get_value("Serial No", x, ["item", ...])
+				if not (
+					isinstance(node.func, ast.Attribute)
+					and node.func.attr in ("get_value", "get_all", "set_value")
+				):
+					continue
+				args = [ast.unparse(a) for a in node.args]
+				if not args or "Serial No" not in args[0]:
+					continue
+				for literal in ast.walk(node):
+					if isinstance(literal, ast.List):
+						for element in literal.elts:
+							if getattr(element, "value", None) == "item":
+								line = source[: element.col_offset].count("\n") + 1
+								offenders.append(
+									f"{os.path.relpath(path, APP_DIR)}:{line} get_value(..., ['item', ...]) on Serial No"
+								)
+
+		self.assertEqual(
+			offenders,
+			[],
+			"Serial No has item_code, not item: " + "; ".join(offenders),
+		)

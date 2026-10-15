@@ -36,10 +36,12 @@ def get_source_details(source_serial_no) -> dict:
 	if not frappe.db.exists("Serial No", source_serial_no):
 		frappe.throw(_("Serial No {0} does not exist.").format(source_serial_no))
 
+	# Serial No links to Item through item_code. Batch, which also appears
+	# below, uses item - they are not interchangeable.
 	serial = frappe.db.get_value(
 		"Serial No",
 		source_serial_no,
-		["item", "batch_no", "custom_weight_kg", "status", "warehouse"],
+		["item_code", "batch_no", "custom_weight_kg", "status", "warehouse"],
 		as_dict=True,
 	)
 
@@ -70,12 +72,12 @@ def get_source_details(source_serial_no) -> dict:
 	)
 
 	item = (
-		frappe.db.get_value("Item", serial.item, ["item_group", "weight_per_unit"], as_dict=True)
+		frappe.db.get_value("Item", serial.item_code, ["item_group", "weight_per_unit"], as_dict=True)
 		or frappe._dict()
 	)
 
 	return {
-		"item": serial.item,
+		"item": serial.item_code,
 		"batch": serial.batch_no,
 		"warehouse": serial.warehouse,
 		"weight": frappe.utils.flt(serial.custom_weight_kg),
