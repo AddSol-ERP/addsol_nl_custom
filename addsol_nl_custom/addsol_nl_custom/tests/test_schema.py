@@ -124,6 +124,19 @@ class TestSelectDefaults(unittest.TestCase):
 			"",
 			"custom_formula must start blank or every Item Group created gets a formula.",
 		)
+		# Frappe checks a Select value against its options before the weight
+		# engine ever sees it, so every financial formula the engine supports
+		# has to be in the dropdown - the four cases tests/test_weight.py
+		# computes.
+		self.assertEqual(
+			field["options"].split("\n")[1:],
+			[
+				"(L * W * T * MF) / 100000",
+				"(L * W * MF) / 10000",
+				"(L * T * MF) / 10000",
+				"(W * T * MF) / 10000",
+			],
+		)
 
 	def test_the_multiplication_factor_has_no_default(self):
 		"""It used to default to 1, which weighs steel 27% heavy."""

@@ -41,6 +41,25 @@ source of truth.
   Removing a row is not enough to drop a field, because the generator carries
   unmanaged fields over from the existing fixture - the `REMOVED` set is what
   actually deletes one.
+- The hand-tuned fields (`custom_formula`, `custom_multiplication_factor`, the
+  batch and serial series on Item Group) are the exception: they live only in
+  `custom_field.json` and the generator carries them over untouched, so editing
+  them there is the way. `Item Group.custom_formula` is a Select whose options
+  must list every financial formula the weight engine accepts - Frappe checks
+  Select options before the engine sees a value. The four formulas are asserted
+  in `tests/test_schema.py::test_the_weight_formula_in_particular`.
+- Fixture import (`sync_fixtures` via `import_file_by_path`) always runs with
+  force=True, after the patch phases of a migrate. The fixture is therefore
+  the source of truth for any record it ships, and a patch that edits such a
+  record is overwritten again moments later. `MPO Format` carries its two
+  plate columns in `print_format.json` for exactly this reason;
+  `add_plate_columns_to_mpo_format` is the backstop for layouts that are not
+  the shipped one.
+- `frappe.modules.patch_handler.run_single` sets `conf.developer_mode = 0`
+  and never restores it, so anything after a patch - notably the fixture
+  import - dies on standard DocType fixtures with "Not in Developer Mode!".
+  Every patch is wrapped in `@with_developer_mode_restored` from
+  `addsol_nl_custom/patches/__init__.py`.
 
 ## Script Reports
 
@@ -91,3 +110,58 @@ and cost per kg are derived from the line's own rate. `update_batch` skips
 values it does not have instead of writing zeros, and every "nothing stamped"
 path prints a reason. `backfill_batch_metadata` re-stamps receipts already
 submitted, because the live hook only runs on submit.
+
+## Installation and site setup (2026-10-16)
+
+- A fixture must not ship a default for a Link into master data. The old
+  `plate_settings.json` default of "MS Scrap" on `scrap_item` made
+  `bench install-app` fail in `init_singles` with "Could not find Scrap
+  Item: MS Scrap" - install-app never runs patches, it marks them complete.
+  `setup_plate_defaults` creates the Scrap group, the MS Scrap Item and the
+  Plate Settings pointers; it runs as a post_model_sync patch on migrate and
+  through the `after_sync` hook at the end of install-app, the only hook that
+  runs after fixtures on that path.
+- `MPO Format` ships its two plate columns in `fixtures/print_format.json`
+  (the fixture import always runs force=True, after the patch phases of a
+  migrate, so the fixture is the source of truth); the
+  `add_plate_columns_to_mpo_format` patch is only the backstop for layouts
+  that are not the shipped one.
+- `patch_handler` leaves `conf.developer_mode = 0`, which kills the fixture
+  import that follows it ("Not in Developer Mode!" on standard fixtures);
+  every patch is wrapped in `@with_developer_mode_restored` from
+  `addsol_nl_custom/patches/__init__.py`.
+- `custom_formula` is a hand-tuned Select on Item Group (in the generator's
+  `hand_tuned` set): its four financial formulas live only in
+  `custom_field.json`, are asserted in
+  `tests/test_schema.py::test_the_weight_formula_in_particular`, and are
+  added by editing the fixture directly.
+
+## Running the tests (2026-10-16)
+
+`bench --site <site> run-tests --app addsol_nl_custom` (the site needs
+`allow_tests: true` while running; set it back afterwards). The suite:
+
+- Rolls the database back per class, not per test (FrappeTestCase), so
+  `TestPlateItem` and `RateTestBase` both do
+  `self.addCleanup(frappe.db.rollback)` in setUp.
+- Stamps test Items with HSN 999999 through `hsn_for_tests()` in
+  `tests/test_item.py`: India Compliance makes HSN mandatory on sales Items,
+  and the code must exist in the GST HSN Code master because the Item
+  validate reads that record's taxes back.
+- Never patches `frappe.msgprint` merely to silence messages:
+  `frappe.throw` raises through msgprint, so the patch would swallow the
+  throw too - it quietly produced a 0 kg weight instead of leaving the old
+  one standing. Capture only where a message is asserted, via a lambda that
+  accepts keyword arguments.
+- Has `make_order` in `tests/test_rate_history.py` stand down
+  `addsol_devoltrans_custom`'s MR-origin hook during insert (that app
+  requires every Purchase Order row to originate from an approved Material
+  Request and tests that rule itself) and fill `schedule_date`, which
+  ERPNext requires on every order row.
+- Gives the BOM in `test_b4_locks_the_dimensions_once_the_item_is_used` a
+  Project: BOM.project is mandatory here (a Property Setter), and a Project
+  names itself from its naming series.
+- Asserts on `price_list_rate` beside `rate` in the PO pricing test; the
+  per-plate weight is a receipt figure (`custom_weight_per_plate_kg` is not
+  a Purchase Order Item field), on an order the piece weight is
+  `custom_unit_weight_kg` set by `set_po_weights`.

@@ -1664,7 +1664,7 @@
   "name": "Item Group-custom_formula",
   "no_copy": 0,
   "non_negative": 0,
-  "options": "\n(L * W * T * MF) / 100000\n(L * W * MF) / 10000\n(L * T * MF) / 10000",
+  "options": "\n(L * W * T * MF) / 100000\n(L * W * MF) / 10000\n(L * T * MF) / 10000\n(W * T * MF) / 10000",
   "permlevel": 0,
   "placeholder": null,
   "precision": "",

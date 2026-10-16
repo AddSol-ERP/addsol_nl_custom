@@ -205,5 +205,8 @@ def get_item_thickness_mm(item) -> float:
 	if thickness.thickness_mm:
 		return frappe.utils.flt(thickness.thickness_mm)
 
+	if not thickness.thickness_value:
+		return 0.0
+
 	_, number = Thickness.split_thickness(thickness.thickness_value)
 	return frappe.utils.flt(number)

@@ -1,10 +1,13 @@
 """Add the two plate columns to the live MPO Format print format.
 
-The columns are added by patching the live record rather than by editing the
-fixture. The fixture holds a copy of the format as it stood when it was
-exported, and fixture import uses force=True, so editing it would overwrite
-anything the site has gained since - which is exactly what "do not remove its
-present content" rules out.
+The fixture is the source of truth: fixture import runs with force=True after
+the patch phases of every migrate, so whatever this patch writes to a live
+record is replaced by the fixture's copy minutes later. `print_format.json`
+therefore ships the columns in its format_data, and this patch exists for
+layouts that are not the shipped one - run it by hand with
+`bench --site <site> run-patch addsol_nl_custom.patches.v1_0.add_plate_columns_to_mpo_format --force`
+against a customized layout, remembering that the next migrate's fixture
+import overwrites that layout with the shipped one.
 
 This only ever appends. If a column is already there it is left alone, and
 nothing is reordered or deleted, so running it twice changes nothing the
@@ -56,7 +59,8 @@ def execute():
 		print(f"{PRINT_FORMAT}: both columns already present, nothing changed.")
 		return
 
-	pf.format_data = json.dumps(layout)
+	# Compact separators, the shape the Print Format Builder itself writes.
+	pf.format_data = json.dumps(layout, separators=(",", ":"))
 	pf.save(ignore_permissions=True)
 	print(f"{PRINT_FORMAT}: added {[c[1] for c in NEW_COLUMNS]} to the {ITEMS_TABLE} table.")
 

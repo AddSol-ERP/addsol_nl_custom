@@ -11,13 +11,16 @@ gone, there had to be something sensible to offer instead of an empty field.
 `bench --site <site> run-tests --app addsol_nl_custom`
 """
 
+from contextlib import contextmanager
+from unittest.mock import patch
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from addsol_nl_custom.addsol_nl_custom.plates.purchase import copy_rate_from_order, set_po_rate
 from addsol_nl_custom.addsol_nl_custom.plates.rate_history import last_rate
 
-from .test_item import make_thickness
+from .test_item import hsn_for_tests, make_thickness
 from .test_weight import THREE_D_FORMULA, make_plate_group
 
 GROUP = "Rate Test Plate Group"
@@ -25,6 +28,26 @@ THICKNESS = "10 mm"
 SUPPLIER = "RATE-TEST-SUPPLIER"
 OTHER_SUPPLIER = "RATE-TEST-OTHER"
 NEW_SUPPLIER = "RATE-TEST-BRAND-NEW"
+
+
+@contextmanager
+def _without_material_request_rule():
+	"""Let a test Purchase Order through the sibling app's MR-origin rule.
+
+	addsol_devoltrans_custom only accepts a Purchase Order row that originates
+	from an approved Material Request, and that rule is bench-wide. It has its
+	own tests; these are about rate history, so the hook stands down while a
+	test order is inserted. Without the sibling app installed there is nothing
+	to stand down.
+	"""
+	try:
+		from addsol_devoltrans_custom.events import work_order_traceability
+	except ImportError:
+		yield
+		return
+
+	with patch.object(work_order_traceability, "validate_purchase_order"):
+		yield
 
 
 def make_item():
@@ -48,6 +71,7 @@ def make_item():
 			"custom_thickness_dropdown": THICKNESS,
 			"custom_length_mm": 2500,
 			"custom_width_mm": 1250,
+			**hsn_for_tests(),
 		}
 	).insert(ignore_permissions=True)
 
@@ -61,30 +85,44 @@ def make_supplier(name):
 
 def make_order(item_code, supplier, rate_per_kg, submit=True, on_date=None):
 	"""A Purchase Order carrying one weighed line at a given rate per kg."""
+	transaction_date = on_date or frappe.utils.add_days(frappe.utils.nowdate(), -1)
 	order = frappe.get_doc(
 		{
 			"doctype": "Purchase Order",
 			"supplier": supplier,
-			"transaction_date": on_date or frappe.utils.add_days(frappe.utils.nowdate(), -1),
+			"transaction_date": transaction_date,
 			"items": [
 				{
 					"item_code": item_code,
 					"qty": 10,
 					"rate": 10,
+					# The form fills Reqd by Date from the order date; a
+					# server-side insert has to set it or ERPNext refuses the
+					# row. It may not be before the transaction date either.
+					"schedule_date": transaction_date,
 					"custom_is_plate": 1,
 					"custom_rate_per_kg": rate_per_kg,
 				}
 			],
 		}
-	).insert(ignore_permissions=True)
+	)
+	with _without_material_request_rule():
+		order.insert(ignore_permissions=True)
 
-	if submit:
-		order.submit()
+		if submit:
+			order.submit()
 
 	return order
 
 
-def plate_row(item_code, **overrides):
+def plate_row(item_code, order=None, **overrides):
+	"""A Purchase Order Item row in memory, optionally linked to an order.
+
+	The row carries the real meta because that is what a row inside a document
+	has, and the production code reads field definitions off it. ``order``
+	makes it look like a receipt line that came off the given Purchase Order,
+	which is how ERPNext's own mapper leaves the row.
+	"""
 	row = frappe._dict(
 		{
 			"idx": 1,
@@ -96,6 +134,10 @@ def plate_row(item_code, **overrides):
 			"custom_rate_per_kg": None,
 		}
 	)
+	row.meta = frappe.get_meta("Purchase Order Item")
+	if order:
+		row.purchase_order = order.name
+		row.purchase_order_item = order.items[0].name
 	row.update(overrides)
 	return row
 
@@ -109,6 +151,11 @@ def po_doc(row, supplier=SUPPLIER):
 class RateTestBase(FrappeTestCase):
 	def setUp(self):
 		super().setUp()
+		# FrappeTestCase rolls the database back once per class, not once per
+		# test, so a Purchase Order an earlier test submitted would still be
+		# there for last_rate to find. Undo whatever the last test left; the
+		# helpers below rebuild the world this test needs.
+		self.addCleanup(frappe.db.rollback)
 		self.group = make_plate_group(GROUP, 0.785, THREE_D_FORMULA)
 		make_thickness(THICKNESS)
 		self.item = make_item().name
@@ -205,15 +252,17 @@ class TestSetPoRate(RateTestBase):
 
 		set_po_rate(po_doc(row), row)
 
-		# 2453.125 kg x 62.5 = 153320.31, over 10 plates.
+		# 2453.125 kg x 62.5 = 153320.31, over 10 plates. A per-plate weight is
+		# a receipt figure - on an order, the piece weight is set by
+		# set_po_weights as custom_unit_weight_kg, not by the pricing here.
 		self.assertEqual(row.rate, 15332.031)
-		self.assertEqual(row.custom_weight_per_plate_kg, 245.313)
+		self.assertEqual(row.price_list_rate, 15332.031)
 
 
 class TestCopyRateFromOrder(RateTestBase):
 	def test_the_order_rate_is_taken(self):
-		make_order(self.item, self.supplier, 62.5)
-		row = plate_row(self.item, custom_rate_per_kg=99.0)
+		order = make_order(self.item, self.supplier, 62.5)
+		row = plate_row(self.item, order, custom_rate_per_kg=99.0)
 
 		copy_rate_from_order(po_doc(row), row)
 
@@ -222,16 +271,16 @@ class TestCopyRateFromOrder(RateTestBase):
 	def test_a_rate_left_on_the_receipt_is_replaced_not_refused(self):
 		# A receipt is priced at the rate the order agreed. There is nothing to
 		# reconcile, so a stale figure left on the row is simply overwritten.
-		make_order(self.item, self.supplier, 62.5)
-		row = plate_row(self.item, custom_rate_per_kg=99.0)
+		order = make_order(self.item, self.supplier, 62.5)
+		row = plate_row(self.item, order, custom_rate_per_kg=99.0)
 
 		copy_rate_from_order(po_doc(row), row)
 
 		self.assertEqual(row.custom_rate_per_kg, 62.5)
 
 	def test_an_order_line_with_no_rate_is_still_refused(self):
-		make_order(self.item, self.supplier, 0)
-		row = plate_row(self.item)
+		order = make_order(self.item, self.supplier, 0)
+		row = plate_row(self.item, order)
 
 		with self.assertRaises(frappe.ValidationError):
 			copy_rate_from_order(po_doc(row), row)

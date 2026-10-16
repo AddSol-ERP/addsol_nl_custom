@@ -33,11 +33,15 @@ class Thickness(Document):
 		('4 mm', 4) for all of them. The label always reads '<number> mm' and
 		the number never carries a trailing '.0'.
 
+		Nothing at all is refused rather than passed through: a Thickness
+		always carries a value (the doctype marks it required), so there is no
+		empty label for the rest of the app to read.
+
 		The only regular expression left here strips the 'mm' unit - the number
 		itself is parsed as a number, not dug out of the text.
 		"""
-		if not value:
-			return value, None
+		if value is None or not str(value).strip():
+			frappe.throw(f"Invalid thickness value: {value!r}. Please enter a valid number.")
 
 		# Drop the unit, whatever spacing or casing was used.
 		cleaned = re.sub(r"\s*mm\s*$", "", str(value).strip(), flags=re.IGNORECASE).strip()

@@ -17,6 +17,27 @@ THREE_D_FORMULA = "(L * W * T * MF) / 100000"
 GROUP = "MS Plate 250 Test"
 THICKNESS = "10 mm"
 
+# India Compliance makes HSN/SAC mandatory on sales Items when GST Settings
+# says so, and reads the code back out of the HSN master while saving the
+# Item's taxes. 999999 is what this site's plate Items carry, so the tests
+# create Items the way production does instead of depending on a site where
+# the setting happens to be off.
+TEST_HSN_CODE = "999999"
+
+
+def hsn_for_tests() -> dict:
+	"""The HSN fields for a test Item, or nothing when they cannot apply.
+
+	Item.gst_hsn_code and the GST HSN Code master only exist when India
+	Compliance is installed, so a plain Frappe site gets no field at all
+	rather than one it has nowhere to store.
+	"""
+	if not frappe.get_meta("Item").has_field("gst_hsn_code"):
+		return {}
+	if not frappe.db.exists("GST HSN Code", TEST_HSN_CODE):
+		return {}
+	return {"gst_hsn_code": TEST_HSN_CODE}
+
 
 def make_group(group_name=GROUP, mf=0.785, formula=THREE_D_FORMULA, weighed=True):
 	if frappe.db.exists("Item Group", group_name):
@@ -58,6 +79,7 @@ def make_plate_item(group=GROUP, length=2500, width=1250):
 			"custom_thickness_dropdown": THICKNESS,
 			"custom_length_mm": length,
 			"custom_width_mm": width,
+			**hsn_for_tests(),
 		}
 	).insert(ignore_permissions=True)
 
@@ -67,6 +89,12 @@ class TestPlateItem(FrappeTestCase):
 
 	def setUp(self):
 		super().setUp()
+		# FrappeTestCase rolls the database back once per class, not once per
+		# test, so an Item an earlier test in this class created would still be
+		# there and make_plate_item would hit it as a duplicate entry. Undo
+		# whatever the last test left; the two helpers below rebuild the world
+		# this test needs.
+		self.addCleanup(frappe.db.rollback)
 		self.group = make_group()
 		self.thickness = make_thickness()
 
@@ -121,12 +149,18 @@ class TestPlateItem(FrappeTestCase):
 				"item_group": "Plain Consumable Group",
 				"stock_uom": "Kg",
 				"is_stock_item": 1,
+				**hsn_for_tests(),
 			}
 		).insert(ignore_permissions=True)
 
 		self.assertEqual(item.stock_uom, "Kg")
 		self.assertEqual(item.has_serial_no, 0)
-		self.assertEqual(item.valuation_method, "FIFO")  # ERPNext's own default
+		# ERPNext leaves valuation_method blank on a fresh Item and resolves it
+		# from Stock Settings (FIFO unless the company changed it) at valuation
+		# time. The plate defaults would have written FIFO here, so whatever
+		# ERPNext itself ships as the default is the "left alone" proof.
+		erpnext_default = frappe.get_meta("Item").get_field("valuation_method").default or ""
+		self.assertEqual(item.valuation_method, erpnext_default)
 
 	def test_b5_never_flips_serial_tracking_onto_existing_stock(self):
 		item = make_plate_item()
@@ -155,7 +189,13 @@ class TestPlateItem(FrappeTestCase):
 		messages = []
 		with (
 			patch.object(item_defaults, "item_has_stock", return_value=True),
-			patch.object(item_defaults.frappe, "msgprint", side_effect=messages.append),
+			# A lambda rather than side_effect=messages.append: msgprint is
+			# called with keyword arguments, and list.append takes none.
+			patch.object(
+				item_defaults.frappe,
+				"msgprint",
+				lambda *args, **kwargs: messages.append(args[0]),
+			),
 		):
 			apply_plate_item_defaults(item)
 
@@ -178,10 +218,7 @@ class TestPlateItem(FrappeTestCase):
 		reloaded = frappe.get_doc("Item", item.name)
 		reloaded.stock_uom = "Kg"
 
-		with (
-			patch.object(item_defaults, "item_has_stock", return_value=True),
-			patch.object(item_defaults.frappe, "msgprint"),
-		):
+		with patch.object(item_defaults, "item_has_stock", return_value=True):
 			reloaded.save()  # must not raise
 
 		self.assertEqual(frappe.db.get_value("Item", item.name, "stock_uom"), "Kg")
@@ -191,11 +228,23 @@ class TestPlateItem(FrappeTestCase):
 		self.assertFalse(item_has_transactions(item.name))
 
 		# Put the plate into a bill of materials, which is enough to freeze it.
+		# BOM.project is mandatory on this bench (a Property Setter), and a
+		# Project names itself from its naming series, so the BOM gets the
+		# name the insert came back with rather than the title typed in.
+		project = frappe.db.get_value("Project", {"project_name": "Test Plate BOM Project"})
+		if not project:
+			project = (
+				frappe.get_doc({"doctype": "Project", "project_name": "Test Plate BOM Project"})
+				.insert(ignore_permissions=True)
+				.name
+			)
+
 		frappe.get_doc(
 			{
 				"doctype": "BOM",
 				"item": make_sink_item(),
-				"bom_items": [{"item_code": item.name, "qty": 1}],
+				"project": project,
+				"items": [{"item_code": item.name, "qty": 1}],
 			}
 		).insert(ignore_permissions=True)
 
@@ -234,17 +283,21 @@ class TestPlateItem(FrappeTestCase):
 					"custom_thickness_dropdown": THICKNESS,
 					"custom_length_mm": 2500,
 					"custom_width_mm": 0,
+					**hsn_for_tests(),
 				}
 			).insert(ignore_permissions=True)
 
 	def test_an_existing_item_stays_editable_when_its_weight_cannot_be_recomputed(self):
-		# Half-configured legacy Items must not be locked out of edits.
+		# Half-configured legacy Items must not be locked out of edits. The
+		# save is not wrapped in a msgprint patch: patching frappe.msgprint
+		# would also swallow frappe.throw, which is how the weight calculation
+		# refuses a zero dimension - the recomputation would quietly return 0
+		# instead of failing and leaving the old weight standing.
 		item = make_plate_item()
 		reloaded = frappe.get_doc("Item", item.name)
 		reloaded.custom_width_mm = 0
 
-		with patch("addsol_nl_custom.addsol_nl_custom.plates.item_hooks.frappe.msgprint"):
-			reloaded.save()  # must not raise
+		reloaded.save()  # must not raise
 
 		self.assertEqual(
 			frappe.db.get_value("Item", item.name, "custom_estimated_weight"),
@@ -265,6 +318,7 @@ def make_sink_item():
 				"stock_uom": "Nos",
 				"is_stock_item": 1,
 				"is_manufactured_item": 1,
+				**hsn_for_tests(),
 			}
 		).insert(ignore_permissions=True)
 	return name

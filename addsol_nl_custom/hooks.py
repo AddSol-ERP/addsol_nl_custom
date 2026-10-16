@@ -346,9 +346,13 @@ fixtures = [
 		],
 	},
 	# The two plate formats are ours. "IRS 1099 Form" is a standard=No US
-	# regional format and is not. "MPO Format" belongs to the team; its layout
-	# is a Print Format Builder document rather than Jinja, so it is listed but
-	# not edited until someone confirms which PO format is actually in use.
+	# regional format and is not. "MPO Format" is the team's Print Format
+	# Builder layout: it ships in print_format.json with the two plate columns
+	# already in its format_data, because fixture import runs with force=True
+	# after every migrate's patch phases - a column the fixture does not carry
+	# is wiped again moments after add_plate_columns_to_mpo_format has added it.
+	# If the team confirms a different PO format is the one in use, this entry
+	# and that patch move together.
 	{
 		"dt": "Print Format",
 		"filters": [["name", "in", ["MPO Format", "Plate Serial Label", "Plate Purchase Receipt"]]],
