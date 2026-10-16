@@ -11,6 +11,7 @@ exists first and leaves the rest for the next run.
 """
 
 import frappe
+from frappe.permissions import setup_custom_perms
 
 from addsol_nl_custom.patches import with_developer_mode_restored
 
@@ -61,6 +62,17 @@ def create_approver_permission():
 	"""
 	if not frappe.db.exists("DocType", "Purchase Receipt"):
 		return
+
+	# Frappe ignores a doctype's standard DocPerm rows the moment any Custom
+	# DocPerm row exists for it - Meta.set_custom_permissions replaces the
+	# whole list - so the standard permissions have to be copied over before
+	# the approver's row is added, exactly as the Role Permissions Manager
+	# does when a permission is first customised. Without this copy the one
+	# row below would wipe read, write and create for every other role on
+	# Purchase Receipt. setup_custom_perms only copies when nothing has been
+	# customised yet, so a site where an admin already edited permissions is
+	# left alone.
+	setup_custom_perms("Purchase Receipt")
 
 	if frappe.db.exists("Custom DocPerm", {"role": ROLE, "permlevel": 1, "parent": "Purchase Receipt"}):
 		return

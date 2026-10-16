@@ -10,6 +10,7 @@ addsol_nl_custom.patches.v1_0.drop_supplier_grade_rates
 addsol_nl_custom.patches.v1_0.cleanup_legacy_plate_customizations
 addsol_nl_custom.patches.v1_0.backfill_plate_item_data
 addsol_nl_custom.patches.v1_0.setup_plate_defaults
+addsol_nl_custom.patches.v1_0.fix_purchase_receipt_custom_perms
 addsol_nl_custom.patches.v1_0.backfill_batch_metadata
 addsol_nl_custom.patches.v1_0.add_plate_columns_to_mpo_format
 addsol_nl_custom.patches.v1_0.mark_plate_reports_standard

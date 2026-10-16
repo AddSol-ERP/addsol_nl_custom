@@ -156,6 +156,11 @@ class RateTestBase(FrappeTestCase):
 		# there for last_rate to find. Undo whatever the last test left; the
 		# helpers below rebuild the world this test needs.
 		self.addCleanup(frappe.db.rollback)
+		# This switch is the suite's to set, not the site's. Two tests below
+		# save an order with no rate per kg, which the enabled hooks refuse by
+		# design; the rate machinery itself is called directly here and does
+		# not read the switch. The per-test rollback undoes the write.
+		frappe.db.set_single_value("Plate Settings", "enable_weight_based_purchasing", 0)
 		self.group = make_plate_group(GROUP, 0.785, THREE_D_FORMULA)
 		make_thickness(THICKNESS)
 		self.item = make_item().name

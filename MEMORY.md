@@ -135,6 +135,16 @@ submitted, because the live hook only runs on submit.
   `custom_field.json`, are asserted in
   `tests/test_schema.py::test_the_weight_formula_in_particular`, and are
   added by editing the fixture directly.
+- **Custom DocPerm replaces a doctype's entire permission set.** Frappe
+  ignores the standard DocPerm rows the moment any Custom DocPerm row exists
+  for that doctype (`Meta.set_custom_permissions` swaps the whole list), so
+  adding one row for a new role wipes read/write/create for every existing
+  role unless the standard rows are copied first. The Role Permissions
+  Manager does this via `frappe.permissions.setup_custom_perms`; always do
+  the same. An earlier version of `create_approver_permission` skipped the
+  copy and took away everyone's Purchase Receipt permissions -
+  `fix_purchase_receipt_custom_perms` repairs sites that ran it, and
+  `tests/test_purchase_receipt_permissions.py` pins both halves.
 
 ## Running the tests (2026-10-16)
 
@@ -165,3 +175,7 @@ submitted, because the live hook only runs on submit.
   per-plate weight is a receipt figure (`custom_weight_per_plate_kg` is not
   a Purchase Order Item field), on an order the piece weight is
   `custom_unit_weight_kg` set by `set_po_weights`.
+- `RateTestBase.setUp` writes `Plate Settings.enable_weight_based_purchasing
+  = 0` itself: two tests save an order with no rate per kg, which the
+  enabled hooks refuse by design, and the suite must not depend on the
+  site's own choice of that switch. The per-test rollback undoes the write.
