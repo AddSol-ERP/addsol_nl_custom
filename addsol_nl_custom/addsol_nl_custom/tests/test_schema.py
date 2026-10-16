@@ -475,3 +475,73 @@ class TestStockFieldNames(unittest.TestCase):
 			[],
 			"Serial No has item_code, not item: " + "; ".join(offenders),
 		)
+
+
+class TestFieldsWeUseAreDeclared(unittest.TestCase):
+	"""A field the code reads or writes must be declared somewhere.
+
+	Both of this app's "Unknown column" incidents - Plate Stock Register
+	reading serial.item, and the first Manufacture submit dying on
+	Stock Entry Detail.custom_cutting_record - shared one shape: a query or
+	a db_set naming a field that no fixture and no DocType JSON ever
+	ships. Nothing notices at import time; the first real document to
+	reach the code is the first test.
+	"""
+
+	@staticmethod
+	def declared_fields():
+		fields = {f["fieldname"] for f in load(CUSTOM_FIELD_FIXTURE)}
+		for path in glob.glob(os.path.join(MODULE_DIR, "doctype", "*", "*.json")):
+			for field in load(path).get("fields", []):
+				if field.get("fieldname"):
+					fields.add(field["fieldname"])
+		return fields
+
+	def app_sources(self):
+		for path in glob.glob(os.path.join(MODULE_DIR, "**", "*.py"), recursive=True):
+			if "__pycache__" not in path:
+				yield path
+
+	def test_every_custom_field_literal_is_declared(self):
+		"""Every custom_% string literal in the code must exist in the schema.
+
+		String literals only: identifiers like set_custom_perms are not
+		field names, and scanning those would drown the check in noise.
+		"""
+		import ast
+
+		declared = self.declared_fields()
+		offenders = []
+
+		for path in self.app_sources():
+			source = open(path).read()
+			tree = ast.parse(source)
+			for node in ast.walk(tree):
+				if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+					continue
+				name = node.value
+				rest = name[len("custom_") :] if name.startswith("custom_") else ""
+				if "_" not in rest or not rest.replace("_", "").isalnum():
+					continue
+				if name not in declared:
+					line = source[: node.col_offset].count("\n") + 1
+					offenders.append(f"{os.path.relpath(path, APP_DIR)}:{line} {name}")
+
+		self.assertEqual(
+			offenders,
+			[],
+			"Fields used but never declared (add them to the generator or the DocType): "
+			+ "; ".join(offenders),
+		)
+
+	def test_the_cutting_record_links_back_to_its_stock_entry(self):
+		"""offcut_stock.py writes Plate Cutting Record.stock_entry.
+
+		This one is DocType-owned rather than a Custom Field, so the sweep
+		above cannot see it. It went missing exactly the same way as
+		custom_cutting_record and would have died on the first real cutting
+		record at db_set.
+		"""
+		record = load(os.path.join(MODULE_DIR, "doctype", "plate_cutting_record", "plate_cutting_record.json"))
+		fields = {f.get("fieldname") for f in record["fields"]}
+		self.assertIn("stock_entry", fields)

@@ -133,6 +133,13 @@ FIELD_SPECS = [
 	("Serial No", "custom_heat_number", "Data", "Heat Number", None,
 	 {"fetch_from": "batch_no.custom_heat_number", "fetch_if_empty": 1}),
 	("Serial No", "custom_source_serial_no", "Link", "Source Serial No", "Serial No", {}),
+
+	# ----------------------------------------------- C6 Stock Entry Detail
+	("Stock Entry Detail", "custom_cutting_record", "Link", "Cutting Record", "Plate Cutting Record",
+	 {"read_only": 1,
+	  "description": "Set by the offcut hooks on Manufacture rows that carry a plate "
+	                 "cutting record's offcuts or scrap. Used to follow the stock "
+	                 "entry back onto the record."}),
 ]
 
 # Insert position for each custom field, so they land in a sensible place in the
@@ -178,6 +185,7 @@ INSERT_AFTER = {
 	("Serial No", "custom_weight_kg"): "batch_no",
 	("Serial No", "custom_heat_number"): "custom_weight_kg",
 	("Serial No", "custom_source_serial_no"): "custom_heat_number",
+	("Stock Entry Detail", "custom_cutting_record"): "is_scrap_item",
 }
 
 # Fields this app shipped once and must never come back. Taking a row out of

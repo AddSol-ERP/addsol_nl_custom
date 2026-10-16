@@ -179,3 +179,23 @@ submitted, because the live hook only runs on submit.
   = 0` itself: two tests save an order with no rate per kg, which the
   enabled hooks refuse by design, and the suite must not depend on the
   site's own choice of that switch. The per-test rollback undoes the write.
+
+## Offcut hook fields (2026-10-16)
+
+- `plates/offcut_stock.py` shipped field-incomplete: it selects and stamps
+  `Stock Entry Detail.custom_cutting_record` and db_sets
+  `Plate Cutting Record.stock_entry`, but neither field existed in the
+  fixture nor in the DocType JSON. `sync_cutting_records` runs on every
+  submitted Manufacture Stock Entry, so the first real submit
+  (`MAT-STE-00008`) died with "Unknown column 'custom_cutting_record' in
+  'SELECT'". Both fields are now declared: the Custom Field through the
+  generator's `FIELD_SPECS`/`INSERT_AFTER` (after `is_scrap_item`), the
+  DocType field in `plate_cutting_record.json` (after `status`).
+- The trap is that a missing Custom Field and a missing DocType-owned field
+  fail the same way, at runtime, on the first real document, and only the
+  custom_% half is visible to a fixture-wide check.
+  `tests/test_schema.py::TestFieldsWeUseAreDeclared` now AST-scans every
+  string literal in the app for `custom_*` names and asserts each is declared
+  in the fixture or a shipped DocType JSON, plus pins `stock_entry` on
+  Plate Cutting Record; `tests/test_offcut_stock.py` pins both fields in the
+  live schema and the no-op path of `sync_cutting_records`.

@@ -11,6 +11,7 @@
   "job_card",
   "column_break_work",
   "status",
+  "stock_entry",
   "section_source",
   "source_serial_no",
   "source_item",
@@ -69,6 +70,14 @@
    "label": "Status",
    "options": "\nDraft\nRecorded\nStock Updated",
    "reqd": 1
+  },
+  {
+   "description": "The Manufacture Stock Entry that took this record's offcuts and scrap into stock.",
+   "fieldname": "stock_entry",
+   "fieldtype": "Link",
+   "label": "Stock Entry",
+   "options": "Stock Entry",
+   "read_only": 1
   },
   {
    "fieldname": "section_source",
@@ -220,7 +229,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-10-14 00:00:00.000000",
+ "modified": "2026-10-16 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Addsol Nl Custom",
  "name": "Plate Cutting Record",
