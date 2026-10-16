@@ -94,6 +94,14 @@ doctype_js = {
 # before_install = "addsol_nl_custom.install.before_install"
 # after_install = "addsol_nl_custom.install.after_install"
 
+# install-app never executes patches: it marks them all as completed instead
+# (frappe.installer.set_all_patches_as_completed). after_sync is the hook that
+# runs at the very end of install_app, after sync_fixtures, so the app's master
+# data - role, approver permission, scrap Item Group and Item, Plate Settings
+# pointers - is seeded on a fresh site here, and by the post_model_sync patch on
+# sites that migrate. The patch is idempotent, so both paths may run.
+after_sync = ["addsol_nl_custom.patches.v1_0.setup_plate_defaults.execute"]
+
 # Uninstallation
 # ------------
 

@@ -7,8 +7,10 @@ Checked against the repository rather than the database, so they fail fast
 without needing a site.
 
 Scope note: the fixture also carries a number of pre-existing HR custom fields
-that belong to another project and are deliberately left alone. These tests
-cover the plate work only, so they do not fail on someone else's fields.
+that belong to another project. The plate work is what this app is about, but
+the fixture-wide rules - every record has a name, every Custom Field is named
+the way Frappe names it - apply to those too, because a name that does not
+match is what lets two apps ship the same field and collide on import.
 """
 
 import glob
@@ -199,14 +201,18 @@ class TestFixtures(unittest.TestCase):
 		Script, Print Format, Notification, Server Script, Report, Workflow and
 		Role Profile are all named by their own document name.
 
-		Scoped to the plate DocTypes. The fixture also carries pre-existing HR
-		customisations that are not this app's to rename - Employee.custom_aadhar_card
-		among them, whose name has a transposed letter - and it imports stably
-		by name, so it is left as it is.
+		The Custom Field check covers every record, not just the plate DocTypes.
+		The fixture used to carry a stale copy of Employee.custom_aadhar_card
+		under a name with a transposed letter. That imported cleanly only while
+		no other record held the same fieldname: addsol_devoltrans_custom ships
+		the same field under Frappe's own name, so on a site with both apps the
+		second import died with "A field with the name custom_aadhar_card already
+		exists". A name that is not <DocType>-<fieldname> is never this app's
+		record to keep.
 		"""
 		for path in glob.glob(os.path.join(APP_DIR, "fixtures", "*.json")):
 			for record in load(path):
-				if record["doctype"] == "Custom Field" and record["dt"] in PLATE_DOCTYPES:
+				if record["doctype"] == "Custom Field":
 					self.assertEqual(record["name"], f"{record['dt']}-{record['fieldname']}")
 
 				elif record["doctype"] == "Property Setter" and record["doc_type"] in PLATE_DOCTYPES:

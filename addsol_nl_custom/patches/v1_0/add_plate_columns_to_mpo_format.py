@@ -19,6 +19,8 @@ import json
 
 import frappe
 
+from addsol_nl_custom.patches import with_developer_mode_restored
+
 PRINT_FORMAT = "MPO Format"
 
 # (fieldname, label, fieldtype, width)
@@ -31,6 +33,7 @@ ITEMS_FIELD = "items"
 ITEMS_TABLE = "Purchase Order Item"
 
 
+@with_developer_mode_restored
 def execute():
 	if not frappe.db.exists("Print Format", PRINT_FORMAT):
 		print(f"{PRINT_FORMAT}: not on this site, skipped.")

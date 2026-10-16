@@ -86,9 +86,8 @@
    "label": "Offcut Warehouse",
    "options": "Warehouse"
   },
-  {
-   "default": "MS Scrap",
-   "description": "Item used for scrap, in Kg, valued at the source batch's cost per kg.",
+   {
+    "description": "Item used for scrap, in Kg, valued at the source batch's cost per kg. Set by the setup patch once the Item exists; no DocType default, because a default pointing at an Item that may not exist yet fails Frappe's link check while the Single is first created.",
    "fieldname": "scrap_item",
    "fieldtype": "Link",
    "label": "Scrap Item",

@@ -20,11 +20,14 @@ Idempotent.
 
 import frappe
 
+from addsol_nl_custom.patches import with_developer_mode_restored
+
 # An Item Group carrying a weight formula makes every Item under it a weighed
 # item. That, rather than any flag, is what identifies the plate items here.
 PLATE_GROUP_WHERE = "ifnull(g.custom_formula, '') != ''"
 
 
+@with_developer_mode_restored
 def execute():
 	backfill_thickness_mm()
 	backfill_item_code()
@@ -78,6 +81,17 @@ def backfill_thickness_mm():
 
 def backfill_item_code():
 	"""Set item_code = name on the plate items this app created."""
+	if not frappe.db.has_column("Item Group", "custom_formula"):
+		# The formula column comes from this app's Custom Fields, and
+		# sync_fixtures runs after the patch phases. Without it there is no way
+		# to tell a plate item from any other, so nothing is guessed at.
+		print(
+			"Item: Item Group.custom_formula is not in the database yet, so plate "
+			"items cannot be identified. sync_fixtures adds it; re-run this patch "
+			"once migrate has finished (bench run-patch)."
+		)
+		return
+
 	plate_items = frappe.db.sql(
 		f"""
 		select i.name, i.item_code

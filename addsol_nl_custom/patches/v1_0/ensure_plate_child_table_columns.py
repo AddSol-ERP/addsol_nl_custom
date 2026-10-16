@@ -12,6 +12,8 @@ where the drop has happened but the table has not been cleaned up yet.
 
 import frappe
 
+from addsol_nl_custom.patches import with_developer_mode_restored
+
 CHILD_TABLES = ("Plate Cutting Offcut",)
 PARENT_COLUMNS = {
 	"parent": "varchar(140)",
@@ -20,6 +22,7 @@ PARENT_COLUMNS = {
 }
 
 
+@with_developer_mode_restored
 def execute():
 	for doctype in CHILD_TABLES:
 		if not frappe.db.table_exists(doctype):

@@ -16,10 +16,13 @@ left exactly as it is.
 
 import frappe
 
+from addsol_nl_custom.patches import with_developer_mode_restored
+
 TABLE = "Supplier Grade Rate"
 CUSTOM_FIELD = "Supplier-custom_grade_rates"
 
 
+@with_developer_mode_restored
 def execute():
 	removed = []
 

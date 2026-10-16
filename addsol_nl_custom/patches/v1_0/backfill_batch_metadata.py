@@ -14,8 +14,10 @@ Idempotent, and never overwrites a real value with a zero or a blank.
 import frappe
 
 from addsol_nl_custom.addsol_nl_custom.plates import receipt_meta
+from addsol_nl_custom.patches import with_developer_mode_restored
 
 
+@with_developer_mode_restored
 def execute():
 	rows = frappe.get_all(
 		"Purchase Receipt Item",

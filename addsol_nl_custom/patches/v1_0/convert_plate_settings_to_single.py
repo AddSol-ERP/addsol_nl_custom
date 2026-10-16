@@ -2,6 +2,8 @@
 
 import frappe
 
+from addsol_nl_custom.patches import with_developer_mode_restored
+
 LAYOUT_FIELD_TYPES = {
 	"Section Break",
 	"Column Break",
@@ -11,6 +13,7 @@ LAYOUT_FIELD_TYPES = {
 }
 
 
+@with_developer_mode_restored
 def execute():
 	if not frappe.db.table_exists("Plate Settings"):
 		return

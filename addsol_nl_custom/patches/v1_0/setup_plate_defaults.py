@@ -4,11 +4,15 @@ Idempotent throughout, and it never overwrites a value somebody has already
 chosen. Each single value is only written when it is still empty, and each
 master record is only created when it does not exist.
 
-Run order matters: this is a post_model_sync patch, so the DocTypes and Custom
-Fields are already in place when it runs.
+Run order matters: this is a post_model_sync patch, so the DocTypes are already
+in place when it runs. The Custom Fields arrive with sync_fixtures, which is
+later in the same migrate, so anything here that needs one checks the column
+exists first and leaves the rest for the next run.
 """
 
 import frappe
+
+from addsol_nl_custom.patches import with_developer_mode_restored
 
 ROLE = "Plate Weight Approver"
 SCRAP_ITEM_GROUP = "Scrap"
@@ -25,6 +29,7 @@ SINGLE_DEFAULTS = {
 }
 
 
+@with_developer_mode_restored
 def execute():
 	create_role()
 	create_approver_permission()
@@ -151,8 +156,16 @@ def find_steel_hsn_code():
 
 	Scoped to items under an Item Group that carries a weight formula, so a
 	services or finished-goods code cannot be picked up by accident.
+
+	The formula column belongs to this app's Custom Fields, which migrate and
+	install import from fixtures. If this patch is ever reached before those
+	fixtures, the query would die on an unknown column, so the lookup simply
+	gives up and the scrap Item is left for a later run to create.
 	"""
 	if not frappe.db.has_column("Item", "gst_hsn_code"):
+		return None
+
+	if not frappe.db.has_column("Item Group", "custom_formula"):
 		return None
 
 	rows = frappe.db.sql(

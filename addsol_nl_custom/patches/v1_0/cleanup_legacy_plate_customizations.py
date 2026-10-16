@@ -14,6 +14,8 @@ Idempotent: every step is a no-op once the record is gone.
 
 import frappe
 
+from addsol_nl_custom.patches import with_developer_mode_restored
+
 # Reports / scripts that only existed to serve the Kg-based design.
 LEGACY_REPORTS = ["Attendance Register"]
 LEGACY_CLIENT_SCRIPTS = [
@@ -41,6 +43,7 @@ DETAIL_COLUMNS = {
 DETAIL_LIMIT = 20
 
 
+@with_developer_mode_restored
 def execute():
 	delete_legacy_reports_and_scripts()
 	delete_unused_custom_fields()
