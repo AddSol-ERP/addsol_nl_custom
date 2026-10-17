@@ -111,6 +111,148 @@ values it does not have instead of writing zeros, and every "nothing stamped"
 path prints a reason. `backfill_batch_metadata` re-stamps receipts already
 submitted, because the live hook only runs on submit.
 
+## Weight not recorded on receipt serials (2026-10-17)
+
+`plates/receipt_meta.py` (uncommitted). Symptom: the weight never got recorded
+for each plate - `custom_weight_kg` on a receipt's Serial Nos stayed empty.
+
+`apply_receipt_metadata` runs on `Purchase Receipt.on_submit`, and Frappe runs
+the controller's `on_submit` before any `doc_events` hook. The Serial and Batch
+Bundle is created inside that controller lifecycle with `do_not_submit=True`,
+and its entries were not always visible when the hook fired, so
+`get_bundle_entries` returned `[]` and `stamp_row` bailed out with a print. The
+live log recorded exactly this for PR-26-00011 (rows 1-3) and PR-26-00012 (row
+1): "no serial/batch bundle, nothing stamped." Those receipts are not explained
+by the backfill patch either - `backfill_batch_metadata` ran at 12:39 that day,
+before both of them - so only the new post-commit pass below could have repaired
+them, and it did (their serials and batches now carry the weight, heat number,
+grade and cost).
+
+Two changes, both in `receipt_meta.py`:
+
+- `stamp_row` no longer returns when the bundle carries serials but no batch.
+  The batch is written only `if batch_nos`; the serials are always stamped and
+  the line prints "no batch produced; stamping serials only" instead of
+  discarding everything. The old `if not batch_nos: return` meant a serial-only
+  line got weight nowhere.
+- `apply_receipt_metadata` stamps every row that is `custom_is_plate` or
+  carries `custom_heat_number`/`custom_mtc_no`, and if at least one row
+  qualified it enqueues `stamp_submitted_receipt(receipt_name)` with
+  `enqueue_after_commit=True, queue="short"`. That pass re-reads the receipt
+  but only while `docstatus == 1`, and stamps it again against the committed
+  bundle entries. Both writers use `db.set_value(..., update_modified=False)`,
+  so the second pass overwrites the same values without aging the document and
+  running twice is harmless.
+
+Keeping the trap straight for the next edit:
+
+- The enqueue is guarded by `not frappe.flags.in_test`, so the re-stamp never
+  fires in a test run; `tests/test_receipt_meta.py` calls `stamp_row` and
+  `stamp_submitted_receipt` directly instead. That suite pins the bug - the
+  no-batch test fails on the previous code with `0.0 != 250.0`.
+- The pass depends on the `short` queue worker being up. If it is down, only
+  the immediate pass runs, and `backfill_batch_metadata` is the manual backstop
+  for receipts that slipped through. Both reasons it can miss are printed, never
+  raised.
+- Do not turn those prints into a `frappe.throw`. An intermediate version did,
+  rejected PR-26-00014 with "ERPNext created no serial-and-batch bundle", and
+  blocked the submit. The hook must stay non-blocking; retrying after commit is
+  the guarantee, not failing the receipt.
+
+## Plate Cutting Screen source checks (2026-10-17)
+
+`Plate Cutting Record.check_in_work_order` used to query `"BOM Item"` with
+`parent = work_order`. A BOM Item's `parent` is a BOM name, so the filter could
+never match a Work Order and every cut failed with "Serial No ... is not a
+required item of Work Order ...". It now queries `Work Order Item` - the same
+pattern `addsol_devoltrans_custom`'s `api/work_order_traceability.py` uses. The
+second half of the bug was ordering: `set_source` called `check_in_work_order()`
+before assigning `self.source_item`, so the check ran against an empty item even
+once the table was right; the call now runs after the source fields are set.
+`tests/test_plate_cutting_work_order.py` pins both halves.
+
+## Live offcut weights on Plate Cutting Record (2026-10-17)
+
+Until now the only feedback on an oversized set of offcuts was the save-time
+error from `compute_totals` ("The offcuts ... add up to more than the plate
+weighs"), which never says by how much. The record now answers while the
+operator is still drawing the cut:
+
+- `public/js/plate_cutting_record.js` asks the server on every dimension
+  change (debounced 300 ms), writes `weight_kg`, `theoretical_weight_kg` and
+  `value` onto each row, fills the three totals under the Offcuts table, and
+  sets a red `Over by X kg` page indicator. It must never do the arithmetic
+  itself: the formula and multiplication factor live on the Item Group, and a
+  preview that disagreed with the save would be worse than none. Same rule
+  `item.js` already states for weight fields.
+- The arithmetic lives in `plates/cutting.py`, shared with the save.
+  `get_offcut_details(source_serial_no)` was lifted out of
+  `Plate Cutting Record.set_source` and is now called by `set_source`,
+  `set_offcut_values` and `plates/api.py:estimate_offcut_weights`;
+  `offcut_totals(...)` is the pure math; `compute_totals` is a thin wrapper
+  that throws the original message when `consumed < -OVERAGE_TOLERANCE`. One
+  consequence of the sharing is that the indicator lights exactly when the
+  save would refuse - never a gram earlier.
+- `estimate_offcut_weights` is `@frappe.whitelist(allow_guest=False)` and
+  re-checks `frappe.has_permission("Plate Cutting Record", "write",
+  throw=True)`. It only does arithmetic over the rows the caller sent; it
+  reads no document the caller could not write.
+- The `grade` the weight maths needs is the **Item's `item_group`**, never
+  `get_source_details()["grade"]`, which is the Batch's `custom_grade` label.
+  `get_offcut_details` carries that distinction over explicitly.
+- Grid events do not dispatch where their names suggest. `offcuts_add`
+  (grid.js) and `offcuts_remove` (grid_row.js) are triggered with the
+  **child** doctype, and `script_manager.get_handlers` only ever reads
+  `handlers[doctype][event]`, so both are registered under
+  `frappe.ui.form.on("Plate Cutting Offcut", ...)`. Registering them on the
+  parent form silently does nothing. `clear_doc` drops the row from the
+  parent's table before `offcuts_remove` fires, so re-requesting after a
+  delete cannot leave a stale weight standing in the total.
+- Rows are matched back by their own `name`, echoed by the server, so a reply
+  can never stamp a weight onto the wrong line; `frappe.model.set_value` is a
+  no-op when the value has not moved, so a re-preview after save does not
+  dirty the draft; `estimate_seq` discards replies that arrive out of order.
+- Two DocType JSON changes ship with it: `weight_kg` is now `in_list_view` on
+  Plate Cutting Offcut, and `section_totals` plus the three total fields
+  moved after `offcuts` in `plate_cutting_record.json`. DocType sync is keyed
+  on the JSON's content hash (`tabDocType.migration_hash`), not on its
+  `modified` stamp, so target sites still need `bench migrate`.
+- `tests/test_cutting_estimate.py` (6 tests) pins the preview against the
+  real post-insert totals, the overage prediction, the save-time refusal,
+  incomplete rows, the echoed names, and that the endpoint is not reachable
+  as a guest.
+
+## The first Plate Cutting submit (2026-10-17)
+
+Submitting died with `AttributeError: 'str' object has no attribute 'get'`
+in `parse_naming_series`, from `make_autoname(series, doc="Batch")` in
+`PlateCuttingRecord.make_offcut_batch` and `make_autoname(series,
+doc="Serial No")` in `cutting.reserve_serial_no`. `doc` is the document being
+named - ERPNext calls `make_autoname(series, doc=self)` - so a doctype name
+string reaches `parse_naming_series`, whose literal series parts call
+`doc.get(e)` (naming.py:358). Every real series has a literal part, so
+`OFC.######` dies on "OFC" and `PL-.######` on "PL-". Both sites now pass the
+Batch/Serial dict they are about to insert; fixing only the first just moves
+the crash one line later into `reserve_serial_no`.
+
+Nothing could have caught it earlier: `on_submit` had never run anywhere. The
+site had zero submitted Plate Cutting Records, zero batches on the offcut
+series, and no test touched `create_offcut_stock`, because every existing test
+stops at `validate()`. `tests/test_plate_cutting_submit.py` now inserts and
+submits end to end - written red first, reproducing the production traceback,
+then green. It calls `insert(ignore_mandatory=True)` because `work_order` and
+`job_card` are mandatory on the form while nothing in the submit path reads
+them, and a Job Card fixture would mean an Operation and a Workstation first.
+
+The incident also settled how a change reaches a running site: a DocType JSON
+edit is applied by `bench migrate` (Frappe compares the file's content hash
+with `tabDocType.migration_hash`, not its `modified` stamp), while `.py` and
+`hooks.py` edits are held in memory - gunicorn runs with `--preload` and each
+worker caches a DocType's controller in `sys.modules` on first use. The Work
+Order fix sat on disk from 11:22 while a server started at 05:14 kept throwing
+the old error until `bench restart`, and the `doctype_js` line landed the same
+way. Restart after every server-side edit; migrate after every DocType edit.
+
 ## Installation and site setup (2026-10-16)
 
 - A fixture must not ship a default for a Link into master data. The old

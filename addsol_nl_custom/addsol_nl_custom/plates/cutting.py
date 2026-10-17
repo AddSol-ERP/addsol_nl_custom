@@ -321,8 +321,9 @@ def reserve_serial_no(item_code) -> str:
 	from frappe.model.naming import make_autoname
 
 	series = frappe.db.get_value("Item", item_code, "serial_no_series") or "PL-.######"
+	doc = {"doctype": "Serial No", "item_code": item_code}
 
 	while True:
-		name = make_autoname(series, doc="Serial No")
+		name = make_autoname(series, doc=doc)
 		if not frappe.db.exists("Serial No", name):
 			return name

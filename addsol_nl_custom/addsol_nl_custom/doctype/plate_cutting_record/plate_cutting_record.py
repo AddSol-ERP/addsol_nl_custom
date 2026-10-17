@@ -109,25 +109,25 @@ class PlateCuttingRecord(Document):
 	def make_offcut_batch(self, row, series):
 		from frappe.model.naming import make_autoname
 
+		batch = {
+			"doctype": "Batch",
+			"item": row.offcut_item,
+			"custom_heat_number": self.heat_number,
+			"custom_mtc_no": getattr(self, "mtc_no", None),
+			"custom_grade": frappe.db.get_value("Item", row.offcut_item, "item_group"),
+			"custom_source_batch": self.source_batch,
+			"custom_weight_per_plate_kg": row.weight_kg,
+			"custom_cost_per_kg": self.source_cost_per_kg,
+			"custom_actual_to_theoretical_ratio": self.ratio,
+		}
+
 		while True:
-			name = make_autoname(series, doc="Batch")
+			name = make_autoname(series, doc=batch)
 			if not frappe.db.exists("Batch", name):
 				break
 
-		frappe.get_doc(
-			{
-				"doctype": "Batch",
-				"batch_id": name,
-				"item": row.offcut_item,
-				"custom_heat_number": self.heat_number,
-				"custom_mtc_no": getattr(self, "mtc_no", None),
-				"custom_grade": frappe.db.get_value("Item", row.offcut_item, "item_group"),
-				"custom_source_batch": self.source_batch,
-				"custom_weight_per_plate_kg": row.weight_kg,
-				"custom_cost_per_kg": self.source_cost_per_kg,
-				"custom_actual_to_theoretical_ratio": self.ratio,
-			}
-		).insert(ignore_permissions=True)
+		batch["batch_id"] = name
+		frappe.get_doc(batch).insert(ignore_permissions=True)
 
 		return name
 
