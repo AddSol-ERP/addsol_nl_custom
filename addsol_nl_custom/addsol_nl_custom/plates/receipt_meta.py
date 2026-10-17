@@ -41,6 +41,32 @@ def apply_receipt_metadata(doc, method=None) -> None:
 	if not doc.get("docstatus"):
 		return
 
+	should_stamp = False
+	for row in doc.get("items", []):
+		if row.get("custom_is_plate") or row.get("custom_heat_number") or row.get("custom_mtc_no"):
+			should_stamp = True
+			stamp_row(doc, row)
+
+	# ERPNext can finish writing the Serial and Batch Bundle as part of the
+	# receipt's submit lifecycle. Re-read the submitted receipt after commit so
+	# the metadata copy also runs against the final, persisted bundle entries.
+	# This second pass is idempotent and closes the gap where the on_submit
+	# handler sees a bundle before its entries are available.
+	if should_stamp and not frappe.flags.in_test:
+		frappe.enqueue(
+			"addsol_nl_custom.addsol_nl_custom.plates.receipt_meta.stamp_submitted_receipt",
+			receipt_name=doc.name,
+			queue="short",
+			enqueue_after_commit=True,
+		)
+
+
+def stamp_submitted_receipt(receipt_name) -> None:
+	"""Re-read and stamp a submitted receipt after its stock bundles are committed."""
+	if not frappe.db.exists("Purchase Receipt", {"name": receipt_name, "docstatus": 1}):
+		return
+
+	doc = frappe.get_doc("Purchase Receipt", receipt_name)
 	for row in doc.get("items", []):
 		if row.get("custom_is_plate") or row.get("custom_heat_number") or row.get("custom_mtc_no"):
 			stamp_row(doc, row)
@@ -50,8 +76,8 @@ def stamp_row(receipt, row) -> None:
 	"""Write this line's weight, rate and heat number onto its batch and serials."""
 	bundle_entries = get_bundle_entries(row)
 	if not bundle_entries:
-		# Nothing was created for this line - a return, or a row without serial
-		# and batch tracking. Nothing to stamp.
+		# A post-commit pass re-reads the receipt once ERPNext has finalized its
+		# bundle. Keep this pass non-blocking if entries are not visible yet.
 		print(f"Plate receipt {receipt.name} row {row.idx}: no serial/batch bundle, nothing stamped.")
 		return
 
@@ -66,13 +92,10 @@ def stamp_row(receipt, row) -> None:
 			title=_("More than one heat number on a receipt line"),
 		)
 
-	if not batch_nos:
-		print(f"Plate receipt {receipt.name} row {row.idx}: no batch produced, nothing stamped.")
-		return
-
-	batch_no = next(iter(batch_nos))
 	heat_number = row.get("custom_heat_number")
 	weight_per_plate = weight_per_plate_of(row)
+	serial_nos = sorted({e.serial_no for e in bundle_entries if e.serial_no})
+
 	unit_weight = frappe.utils.flt(frappe.db.get_value("Item", row.get("item_code"), "weight_per_unit"))
 	ratio = (
 		round_half_up(weight_per_plate / unit_weight, RATIO_PRECISION)
@@ -80,18 +103,22 @@ def stamp_row(receipt, row) -> None:
 		else 0.0
 	)
 
-	update_batch(
-		batch_no,
-		heat_number=heat_number,
-		mtc_no=row.get("custom_mtc_no"),
-		grade=grade_of(row.get("item_code")),
-		weight_per_plate=weight_per_plate,
-		cost_per_kg=cost_per_kg_of(row, weight_per_plate),
-		ratio=ratio,
-		is_plate=bool(row.get("custom_is_plate")),
-	)
+	if batch_nos:
+		batch_no = next(iter(batch_nos))
+		update_batch(
+			batch_no,
+			heat_number=heat_number,
+			mtc_no=row.get("custom_mtc_no"),
+			grade=grade_of(row.get("item_code")),
+			weight_per_plate=weight_per_plate,
+			cost_per_kg=cost_per_kg_of(row, weight_per_plate),
+			ratio=ratio,
+			is_plate=bool(row.get("custom_is_plate")),
+		)
+	else:
+		print(f"Plate receipt {receipt.name} row {row.idx}: no batch produced; stamping serials only.")
 
-	for serial_no in sorted({e.serial_no for e in bundle_entries if e.serial_no}):
+	for serial_no in serial_nos:
 		update_serial(serial_no, weight_per_plate, heat_number)
 
 
