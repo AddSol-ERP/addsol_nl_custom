@@ -32,14 +32,16 @@ class PlateCuttingRecord(Document):
 		"""Read the plate being cut and fill in everything derived from it."""
 		details = cutting.get_source_details(self.source_serial_no)
 
-		self.check_in_work_order()
-
 		self.source_item = details["item"]
 		self.source_batch = details["batch"]
 		self.heat_number = details["heat_number"]
 		self.source_weight_kg = details["weight"]
 		self.source_cost_per_kg = details["cost_per_kg"]
 		self.ratio = details["ratio"]
+
+		# Last, because the check reads self.source_item - which is only real
+		# once the lines above have run.
+		self.check_in_work_order()
 
 		dimensions = (
 			frappe.db.get_value(
@@ -58,7 +60,7 @@ class PlateCuttingRecord(Document):
 		self.source_width_mm = frappe.utils.flt(dimensions.custom_width_mm)
 
 	def check_in_work_order(self):
-		"""The plate has to be in this work order's WIP and be part of its BOM."""
+		"""The plate has to be in this work order's WIP and be one of its required items."""
 		if not self.work_order:
 			return
 
@@ -73,8 +75,11 @@ class PlateCuttingRecord(Document):
 				title=_("Plate is not in the WIP warehouse"),
 			)
 
+		# The Work Order's required_items table, not BOM Item: it is the
+		# Work Order's own view of what it consumes (exploded for multi-level
+		# BOMs), and BOM Item's parent is a BOM name, never a Work Order name.
 		required = frappe.get_all(
-			"BOM Item",
+			"Work Order Item",
 			filters={"parent": self.work_order, "item_code": self.source_item},
 			pluck="name",
 		)
