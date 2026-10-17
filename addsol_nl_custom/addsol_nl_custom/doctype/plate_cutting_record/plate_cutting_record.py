@@ -7,7 +7,6 @@ from frappe.model.document import Document
 
 from addsol_nl_custom.addsol_nl_custom.plates import cutting
 from addsol_nl_custom.addsol_nl_custom.plates.settings import get_setting
-from addsol_nl_custom.addsol_nl_custom.plates.weight import get_item_thickness_mm
 
 STATUS_DRAFT = "Draft"
 STATUS_RECORDED = "Recorded"
@@ -30,7 +29,7 @@ class PlateCuttingRecord(Document):
 
 	def set_source(self):
 		"""Read the plate being cut and fill in everything derived from it."""
-		details = cutting.get_source_details(self.source_serial_no)
+		details = cutting.get_offcut_details(self.source_serial_no)
 
 		self.source_item = details["item"]
 		self.source_batch = details["batch"]
@@ -38,26 +37,13 @@ class PlateCuttingRecord(Document):
 		self.source_weight_kg = details["weight"]
 		self.source_cost_per_kg = details["cost_per_kg"]
 		self.ratio = details["ratio"]
+		self.thickness_mm = details["thickness_mm"]
+		self.source_length_mm = details["length_mm"]
+		self.source_width_mm = details["width_mm"]
 
 		# Last, because the check reads self.source_item - which is only real
 		# once the lines above have run.
 		self.check_in_work_order()
-
-		dimensions = (
-			frappe.db.get_value(
-				"Item",
-				details["item"],
-				["custom_thickness_dropdown", "custom_length_mm", "custom_width_mm"],
-				as_dict=True,
-			)
-			or frappe._dict()
-		)
-
-		self.thickness_mm = frappe.utils.flt(
-			get_item_thickness_mm({"custom_thickness_dropdown": dimensions.custom_thickness_dropdown})
-		)
-		self.source_length_mm = frappe.utils.flt(dimensions.custom_length_mm)
-		self.source_width_mm = frappe.utils.flt(dimensions.custom_width_mm)
 
 	def check_in_work_order(self):
 		"""The plate has to be in this work order's WIP and be one of its required items."""
@@ -92,14 +78,10 @@ class PlateCuttingRecord(Document):
 			)
 
 	def set_offcut_values(self):
-		details = {
-			"grade": self.source_item and frappe.db.get_value("Item", self.source_item, "item_group"),
-			"thickness_mm": self.thickness_mm,
-			"length_mm": self.source_length_mm,
-			"width_mm": self.source_width_mm,
-			"cost_per_kg": self.source_cost_per_kg,
-			"ratio": self.ratio or 1.0,
-		}
+		# Read the plate again rather than trusting the fields set_source
+		# assigned: same serial, same Item, same numbers - and the weights stay
+		# right even if this is ever run on its own.
+		details = cutting.get_offcut_details(self.source_serial_no)
 
 		for row in self.offcuts:
 			cutting.check_offcut_fits(self, row, details)

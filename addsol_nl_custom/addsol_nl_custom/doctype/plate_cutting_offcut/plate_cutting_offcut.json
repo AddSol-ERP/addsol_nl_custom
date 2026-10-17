@@ -71,6 +71,7 @@
    "description": "Theoretical weight adjusted by the source batch's actual to theoretical ratio, so the offcut keeps the plate's real density.",
    "fieldname": "weight_kg",
    "fieldtype": "Float",
+   "in_list_view": 1,
    "label": "Weight (Kg)",
    "precision": "3",
    "read_only": 1
@@ -105,7 +106,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-10-14 00:00:00.000000",
+ "modified": "2026-10-17 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Addsol Nl Custom",
  "name": "Plate Cutting Offcut",

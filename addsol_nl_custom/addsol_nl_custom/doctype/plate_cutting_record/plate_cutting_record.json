@@ -22,19 +22,20 @@
   "source_length_mm",
   "source_width_mm",
   "source_weight_kg",
-  "section_weights",
-  "source_cost_per_kg",
-  "column_break_weights",
-  "ratio",
-  "scrap_weight_kg",
-  "scrap_value",
-  "total_offcut_weight_kg",
-  "total_offcut_value",
-  "consumed_weight_kg",
-  "section_offcuts",
-  "offcuts",
-  "amended_from"
- ],
+   "section_weights",
+   "source_cost_per_kg",
+   "column_break_weights",
+   "ratio",
+   "scrap_weight_kg",
+   "scrap_value",
+   "section_offcuts",
+   "offcuts",
+   "section_totals",
+   "total_offcut_weight_kg",
+   "total_offcut_value",
+   "consumed_weight_kg",
+   "amended_from"
+  ],
  "fields": [
   {
    "fieldname": "section_work",
@@ -183,6 +184,11 @@
    "read_only": 1
   },
   {
+   "fieldname": "section_totals",
+   "fieldtype": "Section Break",
+   "label": "Totals"
+  },
+  {
    "fieldname": "total_offcut_weight_kg",
    "fieldtype": "Float",
    "label": "Total Offcut Weight (Kg)",
@@ -229,7 +235,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-10-16 20:00:00.000000",
+ "modified": "2026-10-17 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Addsol Nl Custom",
  "name": "Plate Cutting Record",

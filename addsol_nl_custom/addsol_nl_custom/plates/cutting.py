@@ -20,10 +20,16 @@ from frappe import _
 from addsol_nl_custom.addsol_nl_custom.plates.item_defaults import SERIES_FIELDS
 from addsol_nl_custom.addsol_nl_custom.plates.settings import get_setting
 from addsol_nl_custom.addsol_nl_custom.plates.utils import build_plate_item_name, round_half_up
-from addsol_nl_custom.addsol_nl_custom.plates.weight import compute_theoretical_weight
+from addsol_nl_custom.addsol_nl_custom.plates.weight import compute_theoretical_weight, get_item_thickness_mm
 
 WEIGHT_PRECISION = 3
 RATIO_PRECISION = 4
+
+# A cutting that comes out a fraction of a gram heavy is not a rejection - a
+# plate is never weighed to this precision. The save has always accepted up to
+# this much, so the form's preview must turn red at exactly the same point or
+# it would warn about a document the save happily takes.
+OVERAGE_TOLERANCE = 0.001
 
 TOO_SMALL = "Too small to keep: record as scrap"
 
@@ -88,6 +94,40 @@ def get_source_details(source_serial_no) -> dict:
 		"ratio": frappe.utils.flt(batch.custom_actual_to_theoretical_ratio) or 1.0,
 		"unit_weight": frappe.utils.flt(item.weight_per_unit),
 	}
+
+
+def get_offcut_details(source_serial_no) -> dict:
+	"""Everything compute_offcut and check_offcut_fits need about the plate.
+
+	One reader for both the save and the preview the form asks for while the
+	operator types dimensions, so the two cannot disagree about the grade, the
+	thickness or the plate's real size.
+	"""
+	details = get_source_details(source_serial_no)
+
+	item = (
+		frappe.db.get_value(
+			"Item",
+			details["item"],
+			["item_group", "custom_thickness_dropdown", "custom_length_mm", "custom_width_mm"],
+			as_dict=True,
+		)
+		or frappe._dict()
+	)
+
+	# The formula and multiplication factor live on the Item Group, so the grade
+	# that decides which formula runs is the Item's own group. details["grade"]
+	# prefers the batch's custom_grade, which is only a label - stamping code
+	# writes the group into it today, but nothing stops a batch carrying another
+	# name, and that would silently pick a different (or missing) formula.
+	details["grade"] = item.item_group
+	details["thickness_mm"] = frappe.utils.flt(
+		get_item_thickness_mm({"custom_thickness_dropdown": item.custom_thickness_dropdown})
+	)
+	details["length_mm"] = frappe.utils.flt(item.custom_length_mm)
+	details["width_mm"] = frappe.utils.flt(item.custom_width_mm)
+
+	return details
 
 
 def minimum_offcut(item_group) -> tuple[float, float]:
@@ -163,26 +203,70 @@ def compute_offcut(row, details) -> None:
 	row.value = round_half_up(row.weight_kg * details["cost_per_kg"], 2)
 
 
+def offcut_totals(source_weight_kg, scrap_weight_kg, row_weights, row_values, cost_per_kg) -> dict:
+	"""The cutting summary, shared by the save and the form's live preview.
+
+	Pure arithmetic - no document, no throw - so the numbers shown while the
+	operator types are produced by exactly the code that decides whether the
+	save is allowed.
+
+	`consumed` comes back unrounded on purpose: the tolerance test is a
+	judgement about the raw sum, and rounding it in one caller but not the
+	other is how the preview and the save would start to disagree by a gram.
+	`over_by_kg` is the same judgement the save makes, expressed in
+	kilograms, so the form only warns when the save really would refuse.
+	"""
+	scrap = frappe.utils.flt(scrap_weight_kg)
+	offcuts = sum(frappe.utils.flt(weight) for weight in row_weights)
+	source = frappe.utils.flt(source_weight_kg)
+	consumed = source - offcuts - scrap
+	over_by = (
+		0.0
+		if consumed >= -OVERAGE_TOLERANCE
+		else round_half_up(-consumed, WEIGHT_PRECISION)
+	)
+
+	return {
+		"source_weight_kg": source,
+		"scrap_weight_kg": scrap,
+		"total_offcut_weight_kg": round_half_up(offcuts, WEIGHT_PRECISION),
+		"total_offcut_value": round_half_up(
+			sum(frappe.utils.flt(value) for value in row_values), 2
+		),
+		"scrap_value": round_half_up(scrap * frappe.utils.flt(cost_per_kg), 2),
+		"consumed_weight_kg": round_half_up(max(consumed, 0.0), WEIGHT_PRECISION),
+		"consumed": consumed,
+		"over_by_kg": over_by,
+	}
+
+
 def compute_totals(doc) -> None:
 	"""Offcuts plus scrap can never come to more than the plate weighed."""
-	scrap = frappe.utils.flt(doc.scrap_weight_kg)
-	offcuts = sum(frappe.utils.flt(row.weight_kg) for row in doc.offcuts)
-	source = frappe.utils.flt(doc.source_weight_kg)
+	totals = offcut_totals(
+		source_weight_kg=doc.source_weight_kg,
+		scrap_weight_kg=doc.scrap_weight_kg,
+		row_weights=[row.weight_kg for row in doc.offcuts],
+		row_values=[row.value for row in doc.offcuts],
+		cost_per_kg=doc.source_cost_per_kg,
+	)
 
-	doc.total_offcut_weight_kg = round_half_up(offcuts, WEIGHT_PRECISION)
-	doc.total_offcut_value = round_half_up(sum(frappe.utils.flt(row.value) for row in doc.offcuts), 2)
-	doc.scrap_value = round_half_up(scrap * frappe.utils.flt(doc.source_cost_per_kg), 2)
+	doc.total_offcut_weight_kg = totals["total_offcut_weight_kg"]
+	doc.total_offcut_value = totals["total_offcut_value"]
+	doc.scrap_value = totals["scrap_value"]
 
-	consumed = source - offcuts - scrap
-	if consumed < -0.001:
+	if totals["consumed"] < -OVERAGE_TOLERANCE:
 		frappe.throw(
 			_(
 				"The offcuts ({0} kg) and scrap ({1} kg) add up to more than the plate weighs ({2} kg)."
-			).format(round_half_up(offcuts, 3), round_half_up(scrap, 3), source),
+			).format(
+				totals["total_offcut_weight_kg"],
+				round_half_up(totals["scrap_weight_kg"], WEIGHT_PRECISION),
+				totals["source_weight_kg"],
+			),
 			title=_("More material out than in"),
 		)
 
-	doc.consumed_weight_kg = round_half_up(max(consumed, 0.0), WEIGHT_PRECISION)
+	doc.consumed_weight_kg = totals["consumed_weight_kg"]
 
 
 # ----------------------------------------------------------------- write side
