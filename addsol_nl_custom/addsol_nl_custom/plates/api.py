@@ -36,28 +36,31 @@ def get_theoretical_weight(
 
 
 @frappe.whitelist(allow_guest=False)
-def estimate_offcut_weights(source_serial_no, rows, scrap_weight_kg=0) -> dict:
+def estimate_offcut_weights(source_serial_no, rows) -> dict:
 	"""Preview every offcut's weight and the cutting's total while the form is open.
 
-	public/js/plate_cutting_record.js asks for this whenever a dimension, the
-	scrap weight or a row changes. It runs the same three functions the save
-	will run - cutting.get_offcut_details, cutting.compute_offcut and
-	cutting.offcut_totals - so the preview is not a second implementation that
-	can drift; it is the same arithmetic, asked for earlier. The save keeps the
-	say, and this deliberately does not reject a cutting that runs over - it
-	reports over_by_kg and lets the operator decide.
+	public/js/plate_offcut.js asks for this whenever a dimension or a row
+	changes. It runs the same functions the save will run -
+	cutting.get_offcut_details, cutting.compute_offcut, cutting.auto_scrap_weight
+	and cutting.offcut_totals - so the preview is not a second implementation
+	that can drift; it is the same arithmetic, asked for earlier. The save
+	keeps the say, and this deliberately does not reject a cutting that runs
+	over - it reports over_by_kg and lets the operator decide.
 
 	`rows` is the offcut lines as JSON: [{"name", "length_mm", "width_mm"}].
 	Each line's `name` is echoed straight back, so a reply that lands after the
 	operator has typed again is recognised and dropped instead of being written
 	onto the wrong row.
 
+	Scrap is not an input: the plate is consumed whole, so the scrap balances
+	the weight automatically and is reported back for the form to show.
+
 	A line with a length but no width yet returns zeroes rather than asking for
 	the weight of a zero-size plate, which the formula refuses to guess. That
 	line is simply not drawn yet; the save rejects it properly through
 	check_offcut_fits, as it always has.
 	"""
-	frappe.has_permission("Plate Cutting Record", "write", throw=True)
+	frappe.has_permission("Plate Offcut", "write", throw=True)
 
 	details = cutting.get_offcut_details(source_serial_no)
 	weights: list[float] = []
@@ -83,6 +86,10 @@ def estimate_offcut_weights(source_serial_no, rows, scrap_weight_kg=0) -> dict:
 		weights.append(estimate["weight_kg"])
 		values.append(estimate["value"])
 
+	# The same scrap the save will derive, so the preview and the save can
+	# never disagree about how much of the plate is left over.
+	scrap_weight_kg = cutting.auto_scrap_weight(details["weight"], weights)
+
 	totals = cutting.offcut_totals(
 		source_weight_kg=details["weight"],
 		scrap_weight_kg=scrap_weight_kg,
@@ -96,16 +103,10 @@ def estimate_offcut_weights(source_serial_no, rows, scrap_weight_kg=0) -> dict:
 		"rows": previewed,
 		"total_offcut_weight_kg": totals["total_offcut_weight_kg"],
 		"total_offcut_value": totals["total_offcut_value"],
+		"scrap_weight_kg": totals["scrap_weight_kg"],
 		"scrap_value": totals["scrap_value"],
-		"consumed_weight_kg": totals["consumed_weight_kg"],
 		"over_by_kg": totals["over_by_kg"],
 	}
-
-
-@frappe.whitelist()
-def get_cutting_operation():
-	"""The Operation that should offer the Record Cutting button, if any."""
-	return get_setting("cutting_operation")
 
 
 @frappe.whitelist(allow_guest=False)
@@ -117,7 +118,6 @@ def get_plate_settings():
 		"weight_tolerance_pct": get_setting("weight_tolerance_pct", 10),
 		"enable_weight_based_purchasing": bool(get_setting("enable_weight_based_purchasing", 0)),
 		"can_decide_weight": not approver_role or approver_role in user_roles,
-		"cutting_operation": get_setting("cutting_operation"),
 	}
 
 

@@ -14,3 +14,4 @@ addsol_nl_custom.patches.v1_0.fix_purchase_receipt_custom_perms
 addsol_nl_custom.patches.v1_0.backfill_batch_metadata
 addsol_nl_custom.patches.v1_0.add_plate_columns_to_mpo_format
 addsol_nl_custom.patches.v1_0.mark_plate_reports_standard
+addsol_nl_custom.patches.v1_0.remove_plate_cutting_flow

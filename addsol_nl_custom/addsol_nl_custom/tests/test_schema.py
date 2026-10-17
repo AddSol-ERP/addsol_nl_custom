@@ -481,9 +481,9 @@ class TestFieldsWeUseAreDeclared(unittest.TestCase):
 	"""A field the code reads or writes must be declared somewhere.
 
 	Both of this app's "Unknown column" incidents - Plate Stock Register
-	reading serial.item, and the first Manufacture submit dying on
-	Stock Entry Detail.custom_cutting_record - shared one shape: a query or
-	a db_set naming a field that no fixture and no DocType JSON ever
+	reading serial.item, and the first Manufacture submit dying on a
+	Stock Entry Detail column no fixture shipped - shared one shape: a query
+	or a db_set naming a field that no fixture and no DocType JSON ever
 	ships. Nothing notices at import time; the first real document to
 	reach the code is the first test.
 	"""
@@ -534,14 +534,13 @@ class TestFieldsWeUseAreDeclared(unittest.TestCase):
 			+ "; ".join(offenders),
 		)
 
-	def test_the_cutting_record_links_back_to_its_stock_entry(self):
-		"""offcut_stock.py writes Plate Cutting Record.stock_entry.
+	def test_the_offcut_links_back_to_its_stock_entry(self):
+		"""plate_offcut.py writes Plate Offcut.stock_entry.
 
 		This one is DocType-owned rather than a Custom Field, so the sweep
-		above cannot see it. It went missing exactly the same way as
-		custom_cutting_record and would have died on the first real cutting
-		record at db_set.
+		above cannot see it. It went missing once for the old cutting record
+		and would have died on the first real offcut at db_set.
 		"""
-		record = load(os.path.join(MODULE_DIR, "doctype", "plate_cutting_record", "plate_cutting_record.json"))
-		fields = {f.get("fieldname") for f in record["fields"]}
+		offcut = load(os.path.join(MODULE_DIR, "doctype", "plate_offcut", "plate_offcut.json"))
+		fields = {f.get("fieldname") for f in offcut["fields"]}
 		self.assertIn("stock_entry", fields)

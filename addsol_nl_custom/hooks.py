@@ -52,10 +52,10 @@ app_license = "mit"
 
 doctype_js = {
 	"Item": "public/js/item.js",
-	"Job Card": "public/js/job_card.js",
-	"Plate Cutting Record": "public/js/plate_cutting_record.js",
+	"Plate Offcut": "public/js/plate_offcut.js",
 	"Purchase Order": "public/js/purchase_weight_pricing.js",
 	"Purchase Receipt": "public/js/purchase_weight_pricing.js",
+	"Serial No": "public/js/serial_no.js",
 }
 
 # Svg Icons
@@ -176,14 +176,6 @@ doc_events = {
 	},
 	"Purchase Invoice": {
 		"before_validate": "addsol_nl_custom.addsol_nl_custom.plates.purchase.pi_before_validate",
-	},
-	# Part D5/D6, cutting.
-	"Stock Entry": {
-		"before_validate": (
-			"addsol_nl_custom.addsol_nl_custom.plates.offcut_stock.add_offcuts_to_manufacture_entry"
-		),
-		"on_submit": "addsol_nl_custom.addsol_nl_custom.plates.offcut_stock.sync_cutting_records",
-		"on_cancel": "addsol_nl_custom.addsol_nl_custom.plates.offcut_stock.sync_cutting_records",
 	},
 }
 

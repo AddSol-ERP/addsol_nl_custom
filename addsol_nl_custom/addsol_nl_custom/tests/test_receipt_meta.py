@@ -6,7 +6,7 @@
 `receipt_meta.apply_receipt_metadata` runs on Purchase Receipt submit. It used
 to return as soon as a line's bundle carried no batch, so the serials on that
 line never received `custom_weight_kg` - the very weight the plate reports read
-and the Plate Cutting Screen checks before it lets a plate be cut. The live log
+and the Plate Offcut form checks before it lets a plate be cut. The live log
 for PR-26-00011 and PR-26-00012 recorded exactly this: the stamp ran, found no
 bundle in time, and stamped nothing.
 

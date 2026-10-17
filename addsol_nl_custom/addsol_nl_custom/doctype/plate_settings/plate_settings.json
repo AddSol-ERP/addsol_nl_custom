@@ -13,9 +13,7 @@
   "column_break_purchasing",
   "over_billing_allowance_pct",
   "section_cutting",
-  "cutting_operation",
   "offcut_batch_series",
-  "offcut_warehouse",
   "scrap_item",
   "column_break_cutting",
   "min_offcut_length_mm",
@@ -66,25 +64,11 @@
    "label": "Cutting"
   },
   {
-   "description": "The Job Card operation that shows the Record Cutting button.",
-   "fieldname": "cutting_operation",
-   "fieldtype": "Link",
-   "label": "Cutting Operation",
-   "options": "Operation"
-  },
-  {
    "default": "OFB-.YY.-.#####",
-   "description": "Naming series for batches created by a cutting record.",
+   "description": "Naming series for batches created by a Plate Offcut.",
    "fieldname": "offcut_batch_series",
    "fieldtype": "Data",
    "label": "Offcut Batch Series"
-  },
-  {
-   "description": "Where offcuts are put away when the Manufacture entry takes them back in.",
-   "fieldname": "offcut_warehouse",
-   "fieldtype": "Link",
-   "label": "Offcut Warehouse",
-   "options": "Warehouse"
   },
    {
     "description": "Item used for scrap, in Kg, valued at the source batch's cost per kg. Set by the setup patch once the Item exists; no DocType default, because a default pointing at an Item that may not exist yet fails Frappe's link check while the Single is first created.",

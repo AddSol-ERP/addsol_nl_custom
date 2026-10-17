@@ -12,6 +12,7 @@ frappe.ui.form.on("Item", {
 
 		lock_dimensions_if_used(frm);
 		show_weight(frm);
+		show_create_offcut(frm);
 	},
 
 	custom_thickness_dropdown: function (frm) {
@@ -33,6 +34,22 @@ frappe.ui.form.on("Item", {
 
 function is_weighed(frm) {
 	return !!(frm.doc.item_group && frm.doc.custom_thickness_dropdown);
+}
+
+// The second way into a Plate Offcut: from the plate's own Item. The form
+// opens with this Item filled in, and the serial dropdown then only offers
+// this Item's Active plates. The server refuses anything that is not really
+// cuttable, whatever brought the form up.
+function show_create_offcut(frm) {
+	if (frm.is_new()) return;
+
+	frm.add_custom_button(
+		__("Create Offcut"),
+		() => {
+			frappe.new_doc("Plate Offcut", { source_item: frm.doc.name });
+		},
+		__("Plate")
+	);
 }
 
 function has_dimensions(frm) {

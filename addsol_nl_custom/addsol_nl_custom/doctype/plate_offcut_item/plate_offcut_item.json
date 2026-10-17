@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_rename": 0,
- "creation": "2026-10-14 00:00:00.000000",
+ "creation": "2026-10-17 00:00:00.000000",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
@@ -109,8 +109,7 @@
  "modified": "2026-10-17 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Addsol Nl Custom",
- "name": "Plate Cutting Offcut",
- "naming_rule": "By fieldname",
+ "name": "Plate Offcut Item",
  "owner": "Administrator",
  "permissions": [],
  "sort_field": "modified",

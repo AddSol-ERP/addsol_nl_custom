@@ -1,17 +1,21 @@
-// Plate Cutting Record - live offcut weights and the overage warning.
+// Plate Offcut - live offcut weights and the overage warning.
 //
 // The weight formula and the multiplication factor live on the Item Group, so
 // the numbers are worked out on the server by
 // addsol_nl_custom.plates.api.estimate_offcut_weights - which calls the very
 // functions the save calls (cutting.get_offcut_details, cutting.compute_offcut,
-// cutting.offcut_totals). This file only asks for them and shows them; it must
-// never calculate anything itself, or the preview and the save would disagree.
+// cutting.auto_scrap_weight, cutting.offcut_totals). This file only asks for
+// them and shows them; it must never calculate anything itself, or the preview
+// and the save would disagree.
 //
-// Without it the operator only met these numbers through the save-time error
-// "The offcuts ... add up to more than the plate weighs", with nothing on screen
-// to say by how much. Now each row carries its weight, the total sits under the
-// table, and a red indicator names the overage while the dimensions are still
-// being drawn.
+// Scrap is not typed here: the plate is consumed whole, so the server derives
+// the scrap that balances the weight and this form displays it.
+//
+// Without this file the operator only met these numbers through the save-time
+// error "The offcuts ... add up to more than the plate weighs", with nothing on
+// screen to say by how much. Now each row carries its weight, the total sits
+// under the table, and a red indicator names the overage while the dimensions
+// are still being drawn.
 
 let estimate_seq = 0;
 
@@ -19,24 +23,28 @@ let estimate_seq = 0;
 // would queue replies out of order.
 const request_estimate = frappe.utils.debounce((frm) => refresh_estimates(frm), 300);
 
-frappe.ui.form.on("Plate Cutting Record", {
+frappe.ui.form.on("Plate Offcut", {
 	// Straight away on load - a reopened draft must show its numbers without
 	// the operator having to touch a field first.
 	refresh: function (frm) {
+		// Only an Active serial can be cut; the server refuses the rest, and
+		// this keeps the dropdown from offering plates that cannot be chosen.
+		// Opened from an Item, the list narrows to that Item's own serials.
+		frm.set_query("source_serial_no", () => {
+			const filters = { status: "Active" };
+			if (frm.doc.source_item) filters.item_code = frm.doc.source_item;
+			return { filters };
+		});
+
 		refresh_estimates(frm);
 	},
 
 	source_serial_no: function (frm) {
 		request_estimate(frm);
 	},
-
-	// Scrap counts towards the same limit, so it moves the total too.
-	scrap_weight_kg: function (frm) {
-		request_estimate(frm);
-	},
 });
 
-frappe.ui.form.on("Plate Cutting Offcut", {
+frappe.ui.form.on("Plate Offcut Item", {
 	length_mm: function (frm) {
 		request_estimate(frm);
 	},
@@ -58,7 +66,7 @@ frappe.ui.form.on("Plate Cutting Offcut", {
 });
 
 function refresh_estimates(frm) {
-	// A submitted record already holds the numbers its save wrote, and asking
+	// A submitted document already holds the numbers its save wrote, and asking
 	// again would only risk marking a finished document dirty.
 	if (frm.doc.docstatus) return;
 	if (!frm.doc.source_serial_no) return;
@@ -79,7 +87,6 @@ function refresh_estimates(frm) {
 		args: {
 			source_serial_no: frm.doc.source_serial_no,
 			rows: rows,
-			scrap_weight_kg: frm.doc.scrap_weight_kg,
 		},
 		callback: function (r) {
 			if (seq !== estimate_seq) return;
@@ -119,8 +126,8 @@ function apply_estimate(frm, message) {
 
 	frm.set_value("total_offcut_weight_kg", message.total_offcut_weight_kg);
 	frm.set_value("total_offcut_value", message.total_offcut_value);
+	frm.set_value("scrap_weight_kg", message.scrap_weight_kg);
 	frm.set_value("scrap_value", message.scrap_value);
-	frm.set_value("consumed_weight_kg", message.consumed_weight_kg);
 	frm.refresh_field("offcuts");
 
 	// over_by_kg is already judged against the same tolerance the save uses,
@@ -142,7 +149,7 @@ function clear_estimate(frm) {
 		frappe.model.set_value(row.doctype, row.name, "value", 0);
 	});
 
-	["total_offcut_weight_kg", "total_offcut_value", "scrap_value", "consumed_weight_kg"].forEach(
+	["total_offcut_weight_kg", "total_offcut_value", "scrap_weight_kg", "scrap_value"].forEach(
 		(field) => frm.set_value(field, 0)
 	);
 	frm.refresh_field("offcuts");

@@ -1,94 +1,48 @@
 {
  "actions": [],
- "allow_rename": 1,
- "creation": "2026-10-14 00:00:00.000000",
+ "allow_rename": 0,
+ "autoname": "format:OFC-{YY}-{#####}",
+ "creation": "2026-10-17 00:00:00.000000",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "section_work",
-  "work_order",
-  "job_card",
-  "column_break_work",
-  "status",
-  "stock_entry",
   "section_source",
   "source_serial_no",
   "source_item",
   "source_batch",
   "heat_number",
   "column_break_source",
+  "warehouse",
   "thickness_mm",
   "source_length_mm",
   "source_width_mm",
   "source_weight_kg",
-   "section_weights",
-   "source_cost_per_kg",
-   "column_break_weights",
-   "ratio",
-   "scrap_weight_kg",
-   "scrap_value",
-   "section_offcuts",
-   "offcuts",
-   "section_totals",
-   "total_offcut_weight_kg",
-   "total_offcut_value",
-   "consumed_weight_kg",
-   "amended_from"
-  ],
+  "section_weights",
+  "source_cost_per_kg",
+  "column_break_weights",
+  "ratio",
+  "scrap_weight_kg",
+  "scrap_value",
+  "section_offcuts",
+  "offcuts",
+  "section_totals",
+  "total_offcut_weight_kg",
+  "total_offcut_value",
+  "stock_entry",
+  "amended_from"
+ ],
  "fields": [
-  {
-   "fieldname": "section_work",
-   "fieldtype": "Section Break",
-   "label": "Work"
-  },
-  {
-   "fieldname": "work_order",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Work Order",
-   "options": "Work Order",
-   "reqd": 1
-  },
-  {
-   "description": "The Job Card whose operation is the cutting operation.",
-   "fieldname": "job_card",
-   "fieldtype": "Link",
-   "label": "Job Card",
-   "options": "Job Card",
-   "reqd": 1
-  },
-  {
-   "fieldname": "column_break_work",
-   "fieldtype": "Column Break"
-  },
-  {
-   "default": "Draft",
-   "fieldname": "status",
-   "fieldtype": "Select",
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "label": "Status",
-   "options": "\nDraft\nRecorded\nStock Updated",
-   "reqd": 1
-  },
-  {
-   "description": "The Manufacture Stock Entry that took this record's offcuts and scrap into stock.",
-   "fieldname": "stock_entry",
-   "fieldtype": "Link",
-   "label": "Stock Entry",
-   "options": "Stock Entry",
-   "read_only": 1
-  },
   {
    "fieldname": "section_source",
    "fieldtype": "Section Break",
    "label": "Source Plate"
   },
   {
-   "description": "The plate that was cut. Must be active and sitting in the Work Order's WIP warehouse.",
+   "description": "The plate being cut. It must be Active, weighed, and sitting in a warehouse - it is consumed in full by the Repack created on submit.",
    "fieldname": "source_serial_no",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Source Serial No",
    "options": "Serial No",
    "reqd": 1
@@ -116,6 +70,14 @@
   {
    "fieldname": "column_break_source",
    "fieldtype": "Column Break"
+  },
+  {
+   "description": "Where the plate sits now. The offcuts are put away in the same warehouse.",
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "label": "Plate Warehouse",
+   "options": "Warehouse",
+   "read_only": 1
   },
   {
    "fieldname": "thickness_mm",
@@ -169,10 +131,13 @@
    "read_only": 1
   },
   {
+   "bold": 1,
+   "description": "Filled in automatically: the source weight minus the offcuts, so the plate balances exactly (within 0.001 kg).",
    "fieldname": "scrap_weight_kg",
    "fieldtype": "Float",
    "label": "Scrap Weight (Kg)",
-   "precision": "3"
+   "precision": "3",
+   "read_only": 1
   },
   {
    "description": "Scrap weight times the source cost per kg.",
@@ -182,6 +147,17 @@
    "options": "currency",
    "precision": "2",
    "read_only": 1
+  },
+  {
+   "fieldname": "section_offcuts",
+   "fieldtype": "Section Break",
+   "label": "Offcuts"
+  },
+  {
+   "fieldname": "offcuts",
+   "fieldtype": "Table",
+   "label": "Offcuts",
+   "options": "Plate Offcut Item"
   },
   {
    "fieldname": "section_totals",
@@ -204,30 +180,20 @@
    "read_only": 1
   },
   {
-   "description": "Source weight minus the offcuts and the scrap. Cannot go below zero.",
-   "fieldname": "consumed_weight_kg",
-   "fieldtype": "Float",
-   "label": "Consumed Weight (Kg)",
-   "precision": "3",
+   "description": "The Repack Stock Entry created on submit: the plate out, the offcuts and the scrap in, all in the plate's own warehouse.",
+   "fieldname": "stock_entry",
+   "fieldtype": "Link",
+   "label": "Stock Entry",
+   "no_copy": 1,
+   "options": "Stock Entry",
    "read_only": 1
-  },
-  {
-   "fieldname": "section_offcuts",
-   "fieldtype": "Section Break",
-   "label": "Offcuts"
-  },
-  {
-   "fieldname": "offcuts",
-   "fieldtype": "Table",
-   "label": "Offcuts",
-   "options": "Plate Cutting Offcut"
   },
   {
    "fieldname": "amended_from",
    "fieldtype": "Link",
    "label": "Amended From",
    "no_copy": 1,
-   "options": "Plate Cutting Record",
+   "options": "Plate Offcut",
    "print_hide": 1,
    "read_only": 1
   }
@@ -238,8 +204,7 @@
  "modified": "2026-10-17 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Addsol Nl Custom",
- "name": "Plate Cutting Record",
- "naming_rule": "By \"Naming Series\" field",
+ "name": "Plate Offcut",
  "owner": "Administrator",
  "permissions": [
   {

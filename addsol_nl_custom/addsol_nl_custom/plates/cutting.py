@@ -3,10 +3,11 @@
 
 """Cutting a plate into offcuts.
 
-One plate goes in, a set of offcuts and some scrap kg come out. The offcuts
-become real stock in their own right, each with its own item, batch and serial,
-all pointing back at the plate they came from so the heat number stays
-traceable.
+One plate goes in whole, a set of offcuts and some scrap kg come out - booked
+by a Plate Offcut, which repacks the plate into its pieces on submit. The
+offcuts become real stock in their own right, each with its own item, batch
+and serial, all pointing back at the plate they came from so the heat number
+stays traceable.
 
 The arithmetic follows the source lot rather than the drawing: an offcut's
 weight is its theoretical weight for the new size, multiplied by the source
@@ -203,6 +204,18 @@ def compute_offcut(row, details) -> None:
 	row.value = round_half_up(row.weight_kg * details["cost_per_kg"], 2)
 
 
+def auto_scrap_weight(source_weight_kg, row_weights) -> float:
+	"""The scrap that balances the plate: source weight minus the offcuts.
+
+	The plate is consumed whole, so whatever the offcuts do not weigh has to
+	leave as scrap or that weight vanishes from stock. Never below zero -
+	when the offcuts weigh more, there is no scrap and compute_totals is the
+	one that rejects the overage.
+	"""
+	offcuts = sum(frappe.utils.flt(weight) for weight in row_weights)
+	return max(round_half_up(frappe.utils.flt(source_weight_kg) - offcuts, WEIGHT_PRECISION), 0.0)
+
+
 def offcut_totals(source_weight_kg, scrap_weight_kg, row_weights, row_values, cost_per_kg) -> dict:
 	"""The cutting summary, shared by the save and the form's live preview.
 
@@ -234,7 +247,6 @@ def offcut_totals(source_weight_kg, scrap_weight_kg, row_weights, row_values, co
 			sum(frappe.utils.flt(value) for value in row_values), 2
 		),
 		"scrap_value": round_half_up(scrap * frappe.utils.flt(cost_per_kg), 2),
-		"consumed_weight_kg": round_half_up(max(consumed, 0.0), WEIGHT_PRECISION),
 		"consumed": consumed,
 		"over_by_kg": over_by,
 	}
@@ -265,8 +277,6 @@ def compute_totals(doc) -> None:
 			),
 			title=_("More material out than in"),
 		)
-
-	doc.consumed_weight_kg = totals["consumed_weight_kg"]
 
 
 # ----------------------------------------------------------------- write side

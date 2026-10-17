@@ -30,9 +30,9 @@ source of truth.
 - There is no supplier price list. `Supplier Grade Rate` was removed along with
   the per-supplier validity windows; it tied the price to the supplier's record
   and overwrote the buyer's figure on every items-grid change.
-- Keep weight tolerance, over-billing allowance, approval roles, cutting
-  operation, and offcut settings in Plate Settings unless the data is truly an
-  item-specific property.
+- Keep weight tolerance, over-billing allowance, approval roles, and the
+  offcut settings (minimum cut size, offcut batch series, scrap Item) in
+  Plate Settings unless the data is truly an item-specific property.
 - API lookups that control UI behavior must not expose data to guests. The
   backend must still enforce item eligibility, permissions, tolerance, and
   approval decisions when documents are saved or submitted.
@@ -159,99 +159,94 @@ Keeping the trap straight for the next edit:
   blocked the submit. The hook must stay non-blocking; retrying after commit is
   the guarantee, not failing the receipt.
 
-## Plate Cutting Screen source checks (2026-10-17)
+## Plate Offcut replaces the Work Order cutting flow (2026-10-17)
 
-`Plate Cutting Record.check_in_work_order` used to query `"BOM Item"` with
-`parent = work_order`. A BOM Item's `parent` is a BOM name, so the filter could
-never match a Work Order and every cut failed with "Serial No ... is not a
-required item of Work Order ...". It now queries `Work Order Item` - the same
-pattern `addsol_devoltrans_custom`'s `api/work_order_traceability.py` uses. The
-second half of the bug was ordering: `set_source` called `check_in_work_order()`
-before assigning `self.source_item`, so the check ran against an empty item even
-once the table was right; the call now runs after the source fields are set.
-`tests/test_plate_cutting_work_order.py` pins both halves.
+The Work Order/Job Card coupled flow is gone, deleted outright (clean
+cutover, no data preserved): `Plate Cutting Record`, `Plate Cutting Offcut`,
+`plates/offcut_stock.py`, the Job Card and cutting-record client scripts and
+their tests were removed; `cutting_operation`/`offcut_warehouse` were dropped
+from Plate Settings; and `patches/v1_0/remove_plate_cutting_flow.py`
+(post_model_sync, idempotent, developer-mode restored) deletes the old Custom
+Fields, drops both tables and removes the DocType records on existing sites.
 
-## Live offcut weights on Plate Cutting Record (2026-10-17)
+Its replacement is the submittable `Plate Offcut` DocType
+(`format:OFC-{YY}-{#####}` -> `OFC-26-00045`, Manufacturing User/Manager),
+entered from its own list, a
+Create Offcut button on Serial No, or the same button on Item:
 
-Until now the only feedback on an oversized set of offcuts was the save-time
-error from `compute_totals` ("The offcuts ... add up to more than the plate
-weighs"), which never says by how much. The record now answers while the
-operator is still drawing the cut:
+- **validate** reads the plate through `cutting.get_offcut_details` (Active,
+  weighed, in a warehouse - a serial with no warehouse throws, because a
+  Repack row without `s_warehouse` is an inbound row), checks each cut fits
+  and meets the Item Group minimums, recomputes every row, then auto-fills
+  `scrap_weight_kg = source - sum(offcuts)` (floor 0, `auto_scrap_weight`)
+  and runs `compute_totals`, which refuses an overage beyond
+  `OVERAGE_TOLERANCE`. Scrap is not an input; zero scrap means no scrap row
+  and no scrap Item required.
+- **on_submit** (`create_offcut_stock`) reuses or creates one `offcut_item`
+  per size via `get_or_create_offcut_item` (`<Item Group>-<T>x<L>x<W>`),
+  creates one Batch per offcut (`offcut_batch_series`, heat/MTC/grade/ratio/
+  cost stamped - grade read from the Item's `item_group`, never the batch
+  label), reserves a Serial No per offcut, inserts AND submits a **Repack**
+  Stock Entry in one go, then stamps `custom_weight_kg` and
+  `custom_source_serial_no` onto the new serials.
+- The Repack takes the plate out of its own warehouse and puts offcuts and
+  scrap back **into the same warehouse**; full serial consumption, qty 1 per
+  piece. Destination rows set `set_basic_rate_manually=1` with **both**
+  `basic_rate` and `basic_amount`: `set_basic_rate` skips manual rows so
+  `basic_amount` would stay 0, and `validate_repack_entry` refuses a Repack
+  with more than one finished item unless every row is manual. No work
+  order, no BOM, no header/target warehouses, no `fg_completed_qty`.
+- **Frappe runs `db_update()` + `update_children()` before `on_submit`** -
+  anything decided while submitting (the stock_entry name, batch/serial
+  names, offcut_item) must be written explicitly with `self.db_update()` /
+  `row.db_update()` or it exists only in memory. The old flow had exactly
+  this latent bug.
+- **on_cancel** cancels the Repack (ERPNext's own refusal to cancel once an
+  offcut serial has moved stays in force), force-deletes the offcut Batches
+  and blanks each row's `serial_no`/`batch_no`, so an amend/resubmit
+  reserves fresh names instead of tripping over the cancelled attempt's
+  inactive serials.
+- `plates/api.py:estimate_offcut_weights(source_serial_no, rows)` powers the
+  live preview in `public/js/plate_offcut.js` (debounced, scrap included,
+  `allow_guest=False` plus an explicit
+  `has_permission("Plate Offcut", "write", throw=True)`, row names echoed
+  back). The generated Stock Entry is an implementation detail
+  (`flags.ignore_permissions`); the permission gate is submitting the Plate
+  Offcut itself.
+- `tests/test_plate_offcut.py` covers submit end to end - Repack shape,
+  manual rates, serial/batch traceability, scrap balance, zero-scrap,
+  item reuse, cancel, amend - and `tests/test_cutting_estimate.py` pins the
+  preview against the real post-insert totals.
 
-- `public/js/plate_cutting_record.js` asks the server on every dimension
-  change (debounced 300 ms), writes `weight_kg`, `theoretical_weight_kg` and
-  `value` onto each row, fills the three totals under the Offcuts table, and
-  sets a red `Over by X kg` page indicator. It must never do the arithmetic
-  itself: the formula and multiplication factor live on the Item Group, and a
-  preview that disagreed with the save would be worse than none. Same rule
-  `item.js` already states for weight fields.
-- The arithmetic lives in `plates/cutting.py`, shared with the save.
-  `get_offcut_details(source_serial_no)` was lifted out of
-  `Plate Cutting Record.set_source` and is now called by `set_source`,
-  `set_offcut_values` and `plates/api.py:estimate_offcut_weights`;
-  `offcut_totals(...)` is the pure math; `compute_totals` is a thin wrapper
-  that throws the original message when `consumed < -OVERAGE_TOLERANCE`. One
-  consequence of the sharing is that the indicator lights exactly when the
-  save would refuse - never a gram earlier.
-- `estimate_offcut_weights` is `@frappe.whitelist(allow_guest=False)` and
-  re-checks `frappe.has_permission("Plate Cutting Record", "write",
-  throw=True)`. It only does arithmetic over the rows the caller sent; it
-  reads no document the caller could not write.
-- The `grade` the weight maths needs is the **Item's `item_group`**, never
-  `get_source_details()["grade"]`, which is the Batch's `custom_grade` label.
-  `get_offcut_details` carries that distinction over explicitly.
-- Grid events do not dispatch where their names suggest. `offcuts_add`
-  (grid.js) and `offcuts_remove` (grid_row.js) are triggered with the
-  **child** doctype, and `script_manager.get_handlers` only ever reads
-  `handlers[doctype][event]`, so both are registered under
-  `frappe.ui.form.on("Plate Cutting Offcut", ...)`. Registering them on the
-  parent form silently does nothing. `clear_doc` drops the row from the
-  parent's table before `offcuts_remove` fires, so re-requesting after a
-  delete cannot leave a stale weight standing in the total.
-- Rows are matched back by their own `name`, echoed by the server, so a reply
-  can never stamp a weight onto the wrong line; `frappe.model.set_value` is a
-  no-op when the value has not moved, so a re-preview after save does not
-  dirty the draft; `estimate_seq` discards replies that arrive out of order.
-- Two DocType JSON changes ship with it: `weight_kg` is now `in_list_view` on
-  Plate Cutting Offcut, and `section_totals` plus the three total fields
-  moved after `offcuts` in `plate_cutting_record.json`. DocType sync is keyed
-  on the JSON's content hash (`tabDocType.migration_hash`), not on its
-  `modified` stamp, so target sites still need `bench migrate`.
-- `tests/test_cutting_estimate.py` (6 tests) pins the preview against the
-  real post-insert totals, the overage prediction, the save-time refusal,
-  incomplete rows, the echoed names, and that the endpoint is not reachable
-  as a guest.
+Traps that carried over into the new flow:
 
-## The first Plate Cutting submit (2026-10-17)
-
-Submitting died with `AttributeError: 'str' object has no attribute 'get'`
-in `parse_naming_series`, from `make_autoname(series, doc="Batch")` in
-`PlateCuttingRecord.make_offcut_batch` and `make_autoname(series,
-doc="Serial No")` in `cutting.reserve_serial_no`. `doc` is the document being
-named - ERPNext calls `make_autoname(series, doc=self)` - so a doctype name
-string reaches `parse_naming_series`, whose literal series parts call
-`doc.get(e)` (naming.py:358). Every real series has a literal part, so
-`OFC.######` dies on "OFC" and `PL-.######` on "PL-". Both sites now pass the
-Batch/Serial dict they are about to insert; fixing only the first just moves
-the crash one line later into `reserve_serial_no`.
-
-Nothing could have caught it earlier: `on_submit` had never run anywhere. The
-site had zero submitted Plate Cutting Records, zero batches on the offcut
-series, and no test touched `create_offcut_stock`, because every existing test
-stops at `validate()`. `tests/test_plate_cutting_submit.py` now inserts and
-submits end to end - written red first, reproducing the production traceback,
-then green. It calls `insert(ignore_mandatory=True)` because `work_order` and
-`job_card` are mandatory on the form while nothing in the submit path reads
-them, and a Job Card fixture would mean an Operation and a Workstation first.
-
-The incident also settled how a change reaches a running site: a DocType JSON
-edit is applied by `bench migrate` (Frappe compares the file's content hash
-with `tabDocType.migration_hash`, not its `modified` stamp), while `.py` and
-`hooks.py` edits are held in memory - gunicorn runs with `--preload` and each
-worker caches a DocType's controller in `sys.modules` on first use. The Work
-Order fix sat on disk from 11:22 while a server started at 05:14 kept throwing
-the old error until `bench restart`, and the `doctype_js` line landed the same
-way. Restart after every server-side edit; migrate after every DocType edit.
+- The grade the weight maths needs is the **Item's `item_group`**, never
+  `get_offcut_details()["grade"]` (the Batch's `custom_grade` label).
+- Grid events do not dispatch where their names suggest: `offcuts_add`,
+  `offcuts_remove` and every row-field event fire under the **child**
+  doctype, so `frappe.ui.form.on("Plate Offcut Item", ...)` holds them;
+  registering them on the parent silently does nothing. `clear_doc` drops a
+  deleted row before `offcuts_remove` fires, so re-requesting after a delete
+  cannot leave a stale weight standing in the total. Rows are matched back
+  by the `name` the server echoes, and `estimate_seq` discards replies that
+  arrive out of order.
+- A DocType's `autoname: "format:..."` expands **braced** params only in
+  this Frappe version (`format:OFC-{YY}-{#####}`; `_format_autoname` regexes
+  `{...}` and leaves anything else verbatim). The dot syntax (`OFB-.YY.-
+  .#####`) belongs to `make_autoname`/naming series: passing
+  `format:OFC-.YY.-.#####` silently names every document with the literal
+  series string, and the second insert dies on a duplicate key - only tests
+  that insert twice ever notice. `make_autoname(series, doc=...)` needs the
+  **dict** about to be inserted, not a doctype name string:
+  `parse_naming_series` calls `doc.get()` on every literal series part, so
+  `OFB-.YY.-.#####` dies on "OFB" when handed a string. Both
+  `make_offcut_batch` and `cutting.reserve_serial_no` pass their dict (the
+  first production submit of the old flow crashed exactly here).
+- A DocType JSON edit reaches a site only through `bench migrate` (Frappe
+  compares the file hash against `tabDocType.migration_hash`, not its
+  `modified` stamp); `.py` and `hooks.py` edits need a `bench restart`,
+  because gunicorn runs with `--preload` and caches controllers in
+  `sys.modules`.
 
 ## Installation and site setup (2026-10-16)
 
@@ -322,22 +317,19 @@ way. Restart after every server-side edit; migrate after every DocType edit.
   enabled hooks refuse by design, and the suite must not depend on the
   site's own choice of that switch. The per-test rollback undoes the write.
 
-## Offcut hook fields (2026-10-16)
+## Declared-field incidents (2026-10-16)
 
-- `plates/offcut_stock.py` shipped field-incomplete: it selects and stamps
-  `Stock Entry Detail.custom_cutting_record` and db_sets
+- The old `plates/offcut_stock.py` shipped field-incomplete: it selected and
+  stamped `Stock Entry Detail.custom_cutting_record` and db_set
   `Plate Cutting Record.stock_entry`, but neither field existed in the
-  fixture nor in the DocType JSON. `sync_cutting_records` runs on every
-  submitted Manufacture Stock Entry, so the first real submit
+  fixture nor in a DocType JSON, so the first submitted Manufacture
   (`MAT-STE-00008`) died with "Unknown column 'custom_cutting_record' in
-  'SELECT'". Both fields are now declared: the Custom Field through the
-  generator's `FIELD_SPECS`/`INSERT_AFTER` (after `is_scrap_item`), the
-  DocType field in `plate_cutting_record.json` (after `status`).
+  'SELECT'". The old flow is gone; the DocType-owned field the new flow
+  writes is `Plate Offcut.stock_entry`.
 - The trap is that a missing Custom Field and a missing DocType-owned field
   fail the same way, at runtime, on the first real document, and only the
   custom_% half is visible to a fixture-wide check.
   `tests/test_schema.py::TestFieldsWeUseAreDeclared` now AST-scans every
   string literal in the app for `custom_*` names and asserts each is declared
   in the fixture or a shipped DocType JSON, plus pins `stock_entry` on
-  Plate Cutting Record; `tests/test_offcut_stock.py` pins both fields in the
-  live schema and the no-op path of `sync_cutting_records`.
+  Plate Offcut; `tests/test_plate_offcut.py` exercises it live.
