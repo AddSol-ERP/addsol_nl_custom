@@ -159,33 +159,44 @@ def _thickness_mm(thickness_mm, thickness_value) -> float:
 
 
 @frappe.whitelist(allow_guest=False)
-def get_available_plates(warehouse=None, search=None, limit_start=0, limit_page_length=20) -> dict:
-	"""Active serial plates that have not been cut yet, with what identifies them.
+def get_available_plates(warehouse=None, search=None, limit_start=0, limit_page_length=10) -> dict:
+	"""Plate ITEMS awaiting a cut, each carrying its own plates.
 
-	The "what can I cut" half of the cutting screen. `status = 'Active'` does the
-	exclusion work by itself: submitting a Plate Offcut repacks the source plate
-	away, so a consumed plate leaves Active on its own and no bookkeeping of
-	"already cut" can drift out of step with the stock.
+	Grouping and paging both happen here, per item, rather than being left to the
+	client. Paging the SERIALS and grouping the page afterwards is wrong in two
+	ways that only show up once there is more than one page of stock:
+
+	  - a parent row's count and total weight describe the page, not the item, so
+	    twenty-five plates of one mill read as "10";
+	  - an item whose plates straddle a page boundary appears as two separate
+	    groups, and paging forward shows the operator the same item again.
+
+	`limit_page_length` is therefore ITEMS, not serials.
+
+	`status = 'Active'` does the exclusion work by itself: submitting a Plate
+	Offcut repacks the source plate away, so a consumed plate leaves Active on
+	its own and no bookkeeping of "already cut" can drift out of step with stock.
 
 	Weight, heat and size each live on a different table -- `Serial No
 	custom_weight_kg`, `Batch custom_heat_number`, `Item custom_length_mm` -- so
-	this is one join rather than three `get_value` calls per plate. Heat is read
+	this joins rather than issuing three `get_value` calls per plate. Heat is read
 	from the Batch for the same reason `get_source_details` reads it there: the
 	list and the form must not disagree about which heat a plate belongs to.
 
-	`can_cut` is reported rather than filtered. A plate with no recorded weight is
-	refused by `get_source_details`, and dropping it from the list would leave the
-	operator asking where their plate went; showing it with the reason is honest
-	and lets the UI refuse the click in place.
+	`can_cut` is reported rather than filtered, exactly as `get_source_details`
+	would refuse it: a plate with no recorded weight is a record to fix, and
+	dropping it would leave the operator asking where their plate went. The
+	aggregate carries a `blocked_count` so the parent row can say how many of its
+	plates need attention without opening anything.
 	"""
 	frappe.has_permission("Serial No", "read", throw=True)
 
-	groups = _weighed_item_groups()
-	if not groups:
-		return {"plates": [], "total": 0}
+	weighed = _weighed_item_groups()
+	if not weighed:
+		return {"groups": [], "total": 0}
 
-	where = ["s.status = 'Active'", "i.item_group IN %(groups)s"]
-	values = {"groups": tuple(groups)}
+	where = ["s.status = 'Active'", "i.item_group IN %(weighed)s"]
+	values = {"weighed": tuple(weighed)}
 
 	if warehouse:
 		where.append("s.warehouse = %(warehouse)s")
@@ -196,37 +207,45 @@ def get_available_plates(warehouse=None, search=None, limit_start=0, limit_page_
 		values["q"] = f"%{search}%"
 
 	clause = " AND ".join(where)
-	page_length = min(max(int(limit_page_length or 20), 1), MAX_PAGE_LENGTH)
+	page_length = min(max(int(limit_page_length or 10), 1), MAX_PAGE_LENGTH)
 	start = max(int(limit_start or 0), 0)
 
-	rows = frappe.db.sql(
-		f"""
-		SELECT
-			s.name AS serial,
-			s.item_code,
-			i.item_group,
-			s.batch_no,
-			s.warehouse,
-			s.custom_weight_kg,
-			b.custom_heat_number,
-			i.custom_length_mm,
-			i.custom_width_mm,
-			-- NOT COALESCE(t.thickness_value, ...). `thickness_value` is a Data
-			-- display string like "10 mm"; `flt("10 mm")` is 0, so folding it in
-			-- here would report a thickness of zero for every plate on a site
-			-- whose Thickness records predate the backfill. The split happens in
-			-- Python below, exactly as weight.get_item_thickness_mm does it.
-			-- And there is no Item.thickness_mm column -- `get_item_thickness_mm`
-			-- reads that key off a frappe._dict, where a missing key is just
-			-- None, so raw SQL would reject the whole query with errno 1054.
-			t.thickness_mm AS thickness_mm,
-			t.thickness_value AS thickness_value
+	# A plate can be cut when it has a weight AND is sitting in a warehouse --
+	# the same two conditions `get_source_details` and `plate_offcut.py` check.
+	# Repeated verbatim in the aggregate below so a blocked plate is counted the
+	# same way it is labelled; the two must not be able to disagree.
+	BLOCKED = "(COALESCE(s.custom_weight_kg, 0) <= 0 OR s.warehouse IS NULL OR s.warehouse = '')"
+
+	# An f-string, deliberately: this is interpolated into another f-string, and
+	# a plain string here would leave a literal `{clause}` in the SQL. ruff's
+	# unused-variable check is what caught that -- `clause` looked assigned and
+	# used but reached the database un-substituted.
+	FROM_JOIN = f"""
 		FROM `tabSerial No` s
 		INNER JOIN `tabItem` i ON i.name = s.item_code
 		LEFT JOIN `tabBatch` b ON b.name = s.batch_no
 		LEFT JOIN `tabThickness` t ON t.name = i.custom_thickness_dropdown
 		WHERE {clause}
-		ORDER BY s.modified DESC
+	"""
+
+	# 1. the page of items, with their totals across EVERY matching plate
+	items = frappe.db.sql(
+		f"""
+		SELECT
+			i.name AS item_code,
+			MAX(i.item_group) AS item_group,
+			MAX(COALESCE(i.custom_length_mm, 0)) AS length_mm,
+			MAX(COALESCE(i.custom_width_mm, 0)) AS width_mm,
+			MAX(COALESCE(t.thickness_mm, 0)) AS thickness_mm,
+			MAX(t.thickness_value) AS thickness_value,
+			COUNT(*) AS plate_count,
+			COALESCE(SUM(COALESCE(s.custom_weight_kg, 0)), 0) AS total_weight_kg,
+			COUNT(DISTINCT NULLIF(s.warehouse, '')) AS warehouse_count,
+			COUNT(DISTINCT NULLIF(b.custom_heat_number, '')) AS heat_count,
+			SUM(CASE WHEN {BLOCKED} THEN 1 ELSE 0 END) AS blocked_count
+		{FROM_JOIN}
+		GROUP BY i.name
+		ORDER BY plate_count DESC, i.name ASC
 		LIMIT %(page_length)s OFFSET %(start)s
 		""",
 		{**values, "page_length": page_length, "start": start},
@@ -234,45 +253,82 @@ def get_available_plates(warehouse=None, search=None, limit_start=0, limit_page_
 	)
 
 	total = frappe.db.sql(
-		f"""
-		SELECT COUNT(*) FROM `tabSerial No` s
-		INNER JOIN `tabItem` i ON i.name = s.item_code
-		LEFT JOIN `tabBatch` b ON b.name = s.batch_no
-		WHERE {clause}
-		""",
+		f"SELECT COUNT(DISTINCT i.name) {FROM_JOIN}",
 		values,
 	)[0][0]
 
-	plates = []
-	for row in rows:
-		weight = frappe.utils.flt(row.custom_weight_kg)
-		thickness = _thickness_mm(row.thickness_mm, row.thickness_value)
-		plates.append(
+	if not items:
+		return {"groups": [], "total": 0}
+
+	codes = [row.item_code for row in items]
+
+	# 2. the plates behind just those items. Ordered to match the item order so
+	#    the UI never has to re-sort, and sized by what the operator asked for
+	#    rather than by a page length that no longer describes them.
+	plates = frappe.db.sql(
+		f"""
+		SELECT
+			s.name AS serial,
+			s.item_code,
+			s.batch_no,
+			s.warehouse,
+			s.custom_weight_kg,
+			b.custom_heat_number,
+			(COALESCE(s.custom_weight_kg, 0) > 0 AND COALESCE(s.warehouse, '') != '') AS can_cut
+		{FROM_JOIN}
+			AND i.name IN %(codes)s
+		ORDER BY FIELD(i.name, %(codes)s), s.name ASC
+		""",
+		{**values, "codes": tuple(codes)},
+		as_dict=True,
+	)
+
+	by_item: dict[str, list] = {code: [] for code in codes}
+	for plate in plates:
+		by_item.setdefault(plate.item_code, []).append(plate)
+
+	groups = []
+	for row in items:
+		children = []
+		for plate in by_item.get(row.item_code, []):
+			can_cut = bool(plate.can_cut)
+			children.append(
+				{
+					"serial": plate.serial,
+					"batch_no": plate.batch_no,
+					"warehouse": plate.warehouse,
+					"heat_number": plate.custom_heat_number,
+					"weight_kg": frappe.utils.flt(plate.custom_weight_kg),
+					"can_cut": can_cut,
+					# The same refusal `get_source_details` raises, stated here so
+					# the operator learns it before clicking rather than after.
+					"blocked_reason": ""
+					if can_cut
+					else (
+						_("Received before weights were recorded.")
+						if not frappe.utils.flt(plate.custom_weight_kg)
+						else _("Not in a warehouse, so there is nothing to cut.")
+					),
+				}
+			)
+
+		groups.append(
 			{
-				"serial": row.serial,
 				"item_code": row.item_code,
 				"item_group": row.item_group,
-				"batch_no": row.batch_no,
-				"warehouse": row.warehouse,
-				"heat_number": row.custom_heat_number,
-				"weight_kg": weight,
-				"length_mm": frappe.utils.flt(row.custom_length_mm),
-				"width_mm": frappe.utils.flt(row.custom_width_mm),
-				"thickness_mm": thickness,
-				"can_cut": bool(weight > 0 and row.warehouse),
-				# The same refusal `get_source_details` would raise, stated here
-				# so the operator learns it before clicking rather than after.
-				"blocked_reason": ""
-				if weight > 0 and row.warehouse
-				else (
-					_("Received before weights were recorded.")
-					if not weight
-					else _("Not in a warehouse, so there is nothing to cut.")
-				),
+				"length_mm": frappe.utils.flt(row.length_mm),
+				"width_mm": frappe.utils.flt(row.width_mm),
+				"thickness_mm": _thickness_mm(row.thickness_mm, row.thickness_value),
+				"plate_count": int(row.plate_count),
+				"total_weight_kg": frappe.utils.flt(row.total_weight_kg),
+				"warehouse_count": int(row.warehouse_count or 0),
+				"heat_count": int(row.heat_count or 0),
+				"blocked_count": int(row.blocked_count or 0),
+				"plates": children,
 			}
 		)
 
-	return {"plates": plates, "total": int(total)}
+	return {"groups": groups, "total": int(total)}
 
 
 @frappe.whitelist(allow_guest=False)
