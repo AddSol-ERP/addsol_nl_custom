@@ -4,6 +4,7 @@
 """Whitelisted helpers the desk forms call."""
 
 import frappe
+from frappe import _
 
 from addsol_nl_custom.addsol_nl_custom.plates import cutting
 from addsol_nl_custom.addsol_nl_custom.plates.settings import get_setting
@@ -106,7 +107,233 @@ def estimate_offcut_weights(source_serial_no, rows) -> dict:
 		"scrap_weight_kg": totals["scrap_weight_kg"],
 		"scrap_value": totals["scrap_value"],
 		"over_by_kg": totals["over_by_kg"],
+		# The plate's own size, straight off `get_offcut_details` above. The
+		# caller draws a scaled cut layout from these, and re-deriving them in
+		# the browser from the Item name would be a second source of truth for
+		# something the server has already read. `thickness_mm` rather than the
+		# Item's `custom_thickness_dropdown`, because that is a Link to a
+		# Thickness whose *label* is a display string like "10 mm".
+		"source_length_mm": details["length_mm"],
+		"source_width_mm": details["width_mm"],
+		"source_thickness_mm": details["thickness_mm"],
 	}
+
+
+def _weighed_item_groups() -> list[str]:
+	"""Item Groups that opted in to being weighed -- the grades a plate can be.
+
+	`grouping.is_weighed_group` additionally insists on a usable formula and a
+	multiplication factor. This is a LIST, so the gate is the flag alone: a group
+	that was flagged but is half-configured still has real plates sitting in
+	stock, and hiding those would look like data loss rather than a filter.
+	"""
+	from addsol_nl_custom.addsol_nl_custom.plates.grouping import WEIGHED_GRADE_FLAG
+
+	return frappe.get_all("Item Group", filters={WEIGHED_GRADE_FLAG: 1}, pluck="name")
+
+
+# `limit_page_length` reaches us as whatever JSON sent, so it is clamped rather
+# than trusted: a single request must not be able to ask for the whole table.
+MAX_PAGE_LENGTH = 200
+
+
+@frappe.whitelist(allow_guest=False)
+def get_available_plates(warehouse=None, search=None, limit_start=0, limit_page_length=20) -> dict:
+	"""Active serial plates that have not been cut yet, with what identifies them.
+
+	The "what can I cut" half of the cutting screen. `status = 'Active'` does the
+	exclusion work by itself: submitting a Plate Offcut repacks the source plate
+	away, so a consumed plate leaves Active on its own and no bookkeeping of
+	"already cut" can drift out of step with the stock.
+
+	Weight, heat and size each live on a different table -- `Serial No
+	custom_weight_kg`, `Batch custom_heat_number`, `Item custom_length_mm` -- so
+	this is one join rather than three `get_value` calls per plate. Heat is read
+	from the Batch for the same reason `get_source_details` reads it there: the
+	list and the form must not disagree about which heat a plate belongs to.
+
+	`can_cut` is reported rather than filtered. A plate with no recorded weight is
+	refused by `get_source_details`, and dropping it from the list would leave the
+	operator asking where their plate went; showing it with the reason is honest
+	and lets the UI refuse the click in place.
+	"""
+	frappe.has_permission("Serial No", "read", throw=True)
+
+	groups = _weighed_item_groups()
+	if not groups:
+		return {"plates": [], "total": 0}
+
+	where = ["s.status = 'Active'", "i.item_group IN %(groups)s"]
+	values = {"groups": tuple(groups)}
+
+	if warehouse:
+		where.append("s.warehouse = %(warehouse)s")
+		values["warehouse"] = warehouse
+
+	if search:
+		where.append("(s.name LIKE %(q)s OR i.name LIKE %(q)s OR b.custom_heat_number LIKE %(q)s)")
+		values["q"] = f"%{search}%"
+
+	clause = " AND ".join(where)
+	page_length = min(max(int(limit_page_length or 20), 1), MAX_PAGE_LENGTH)
+	start = max(int(limit_start or 0), 0)
+
+	rows = frappe.db.sql(
+		f"""
+		SELECT
+			s.name AS serial,
+			s.item_code,
+			i.item_group,
+			s.batch_no,
+			s.warehouse,
+			s.custom_weight_kg,
+			b.custom_heat_number,
+			i.custom_length_mm,
+			i.custom_width_mm,
+			COALESCE(t.thickness_mm, t.thickness_value, i.thickness_mm, 0) AS thickness_mm
+		FROM `tabSerial No` s
+		INNER JOIN `tabItem` i ON i.name = s.item_code
+		LEFT JOIN `tabBatch` b ON b.name = s.batch_no
+		LEFT JOIN `tabThickness` t ON t.name = i.custom_thickness_dropdown
+		WHERE {clause}
+		ORDER BY s.modified DESC
+		LIMIT %(page_length)s OFFSET %(start)s
+		""",
+		{**values, "page_length": page_length, "start": start},
+		as_dict=True,
+	)
+
+	total = frappe.db.sql(
+		f"""
+		SELECT COUNT(*) FROM `tabSerial No` s
+		INNER JOIN `tabItem` i ON i.name = s.item_code
+		LEFT JOIN `tabBatch` b ON b.name = s.batch_no
+		WHERE {clause}
+		""",
+		values,
+	)[0][0]
+
+	plates = []
+	for row in rows:
+		weight = frappe.utils.flt(row.custom_weight_kg)
+		plates.append(
+			{
+				"serial": row.serial,
+				"item_code": row.item_code,
+				"item_group": row.item_group,
+				"batch_no": row.batch_no,
+				"warehouse": row.warehouse,
+				"heat_number": row.custom_heat_number,
+				"weight_kg": weight,
+				"length_mm": frappe.utils.flt(row.custom_length_mm),
+				"width_mm": frappe.utils.flt(row.custom_width_mm),
+				"thickness_mm": frappe.utils.flt(row.thickness_mm),
+				"can_cut": bool(weight > 0 and row.warehouse),
+				# The same refusal `get_source_details` would raise, stated here
+				# so the operator learns it before clicking rather than after.
+				"blocked_reason": ""
+				if weight > 0 and row.warehouse
+				else (
+					_("Received before weights were recorded.")
+					if not weight
+					else _("Not in a warehouse, so there is nothing to cut.")
+				),
+			}
+		)
+
+	return {"plates": plates, "total": int(total)}
+
+
+@frappe.whitelist(allow_guest=False)
+def get_offcut_stock(search=None, limit_start=0, limit_page_length=20) -> dict:
+	"""The offcut pieces already in stock, each pointing back to the plate it came from.
+
+	The "what did I make" half of the cutting screen. `stamp_offcut_serials`
+	writes `custom_source_serial_no` onto every offcut serial on submit, so that
+	column IS the set of offcuts -- there is no separate flag to keep in step.
+
+	Joining from `tabSerial No` rather than from the Plate Offcut Item matters:
+	`cutting.reserve_serial_no` only takes a NAME, so a draft's row already
+	carries a serial number that does not exist as a document. Starting from
+	Serial No therefore shows submitted stock only, with no draft leaking in.
+	"""
+	frappe.has_permission("Serial No", "read", throw=True)
+
+	where = ["s.custom_source_serial_no IS NOT NULL", "s.custom_source_serial_no != ''"]
+	values: dict = {}
+
+	if search:
+		where.append(
+			"(s.name LIKE %(q)s OR s.item_code LIKE %(q)s"
+			" OR s.custom_source_serial_no LIKE %(q)s OR b.custom_heat_number LIKE %(q)s)"
+		)
+		values["q"] = f"%{search}%"
+
+	clause = " AND ".join(where)
+	page_length = min(max(int(limit_page_length or 20), 1), MAX_PAGE_LENGTH)
+	start = max(int(limit_start or 0), 0)
+
+	rows = frappe.db.sql(
+		f"""
+		SELECT
+			s.name AS serial,
+			s.item_code,
+			i.item_group,
+			s.custom_source_serial_no AS source_serial,
+			s.batch_no,
+			s.warehouse,
+			s.status,
+			s.custom_weight_kg,
+			b.custom_heat_number,
+			p.length_mm,
+			p.width_mm,
+			p.theoretical_weight_kg,
+			p.value,
+			p.parent AS offcut
+		FROM `tabSerial No` s
+		INNER JOIN `tabPlate Offcut Item` p ON p.serial_no = s.name
+		LEFT JOIN `tabItem` i ON i.name = s.item_code
+		LEFT JOIN `tabBatch` b ON b.name = s.batch_no
+		WHERE {clause}
+		ORDER BY p.creation DESC
+		LIMIT %(page_length)s OFFSET %(start)s
+		""",
+		{**values, "page_length": page_length, "start": start},
+		as_dict=True,
+	)
+
+	total = frappe.db.sql(
+		f"""
+		SELECT COUNT(*) FROM `tabSerial No` s
+		INNER JOIN `tabPlate Offcut Item` p ON p.serial_no = s.name
+		LEFT JOIN `tabBatch` b ON b.name = s.batch_no
+		WHERE {clause}
+		""",
+		values,
+	)[0][0]
+
+	pieces = [
+		{
+			"serial": row.serial,
+			"item_code": row.item_code,
+			"item_group": row.item_group,
+			"source_serial": row.source_serial,
+			"batch_no": row.batch_no,
+			"warehouse": row.warehouse,
+			"status": row.status,
+			"heat_number": row.custom_heat_number,
+			"weight_kg": frappe.utils.flt(row.custom_weight_kg),
+			"theoretical_weight_kg": frappe.utils.flt(row.theoretical_weight_kg),
+			"value": frappe.utils.flt(row.value),
+			"length_mm": frappe.utils.flt(row.length_mm),
+			"width_mm": frappe.utils.flt(row.width_mm),
+			# The Plate Offcut that produced it, so a click can open the job.
+			"offcut": row.offcut,
+		}
+		for row in rows
+	]
+
+	return {"pieces": pieces, "total": int(total)}
 
 
 @frappe.whitelist(allow_guest=False)
