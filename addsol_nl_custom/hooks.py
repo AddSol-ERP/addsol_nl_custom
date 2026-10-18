@@ -100,8 +100,12 @@ doctype_js = {
 # runs at the very end of install_app, after sync_fixtures, so the app's master
 # data - role, approver permission, scrap Item Group and Item, Plate Settings
 # pointers - is seeded on a fresh site here, and by the post_model_sync patch on
-# sites that migrate. The patch is idempotent, so both paths may run.
-after_sync = ["addsol_nl_custom.patches.v1_0.setup_plate_defaults.execute"]
+# sites that migrate. The PO child-row layout is also applied after fixture
+# sync, so fresh installs and migrations both receive it.
+after_sync = [
+	"addsol_nl_custom.patches.v1_0.setup_plate_defaults.execute",
+	"addsol_nl_custom.patches.v1_0.setup_purchase_order_item_layout.execute",
+]
 
 # Uninstallation
 # ------------
