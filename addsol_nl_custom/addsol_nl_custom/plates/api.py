@@ -137,6 +137,27 @@ def _weighed_item_groups() -> list[str]:
 MAX_PAGE_LENGTH = 200
 
 
+def _thickness_mm(thickness_mm, thickness_value) -> float:
+	"""Thickness in mm from a Thickness row, mirroring weight.get_item_thickness_mm.
+
+	`thickness_value` is a Data display string like "10 mm", so it is split with
+	`Thickness.split_thickness` rather than `flt` -- which would return 0 for the
+	whole string. Doing the split here (once, in Python) instead of per row keeps
+	this a single query: calling `get_item_thickness_mm` per plate would issue a
+	further `get_value` for every row on the page.
+	"""
+	if frappe.utils.flt(thickness_mm):
+		return frappe.utils.flt(thickness_mm)
+
+	if not thickness_value:
+		return 0.0
+
+	from addsol_nl_custom.addsol_nl_custom.doctype.thickness.thickness import Thickness
+
+	_, number = Thickness.split_thickness(thickness_value)
+	return frappe.utils.flt(number)
+
+
 @frappe.whitelist(allow_guest=False)
 def get_available_plates(warehouse=None, search=None, limit_start=0, limit_page_length=20) -> dict:
 	"""Active serial plates that have not been cut yet, with what identifies them.
@@ -190,7 +211,16 @@ def get_available_plates(warehouse=None, search=None, limit_start=0, limit_page_
 			b.custom_heat_number,
 			i.custom_length_mm,
 			i.custom_width_mm,
-			COALESCE(t.thickness_mm, t.thickness_value, i.thickness_mm, 0) AS thickness_mm
+			-- NOT COALESCE(t.thickness_value, ...). `thickness_value` is a Data
+			-- display string like "10 mm"; `flt("10 mm")` is 0, so folding it in
+			-- here would report a thickness of zero for every plate on a site
+			-- whose Thickness records predate the backfill. The split happens in
+			-- Python below, exactly as weight.get_item_thickness_mm does it.
+			-- And there is no Item.thickness_mm column -- `get_item_thickness_mm`
+			-- reads that key off a frappe._dict, where a missing key is just
+			-- None, so raw SQL would reject the whole query with errno 1054.
+			t.thickness_mm AS thickness_mm,
+			t.thickness_value AS thickness_value
 		FROM `tabSerial No` s
 		INNER JOIN `tabItem` i ON i.name = s.item_code
 		LEFT JOIN `tabBatch` b ON b.name = s.batch_no
@@ -216,6 +246,7 @@ def get_available_plates(warehouse=None, search=None, limit_start=0, limit_page_
 	plates = []
 	for row in rows:
 		weight = frappe.utils.flt(row.custom_weight_kg)
+		thickness = _thickness_mm(row.thickness_mm, row.thickness_value)
 		plates.append(
 			{
 				"serial": row.serial,
@@ -227,7 +258,7 @@ def get_available_plates(warehouse=None, search=None, limit_start=0, limit_page_
 				"weight_kg": weight,
 				"length_mm": frappe.utils.flt(row.custom_length_mm),
 				"width_mm": frappe.utils.flt(row.custom_width_mm),
-				"thickness_mm": frappe.utils.flt(row.thickness_mm),
+				"thickness_mm": thickness,
 				"can_cut": bool(weight > 0 and row.warehouse),
 				# The same refusal `get_source_details` would raise, stated here
 				# so the operator learns it before clicking rather than after.
