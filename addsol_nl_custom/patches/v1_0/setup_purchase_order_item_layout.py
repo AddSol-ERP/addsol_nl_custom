@@ -24,36 +24,28 @@ def execute():
 	field_order = [field.fieldname for field in fields if field.fieldname]
 	field_type_by_name = {field.fieldname: field.fieldtype for field in fields if field.fieldname}
 
-	try:
-		description_start = field_order.index(DESCRIPTION_SECTION)
-		quantity_start = field_order.index(QUANTITY_SECTION)
-	except ValueError:
+	if DESCRIPTION_SECTION not in field_order or QUANTITY_SECTION not in field_order:
 		return
 
-	# Already in the desired order; do not overwrite any other local layout edits.
-	if quantity_start < description_start:
-		return
-
-	quantity_end = next(
-		(
-			index
-			for index, fieldname in enumerate(field_order[quantity_start + 1 :], start=quantity_start + 1)
-			if field_type_by_name.get(fieldname) == "Section Break"
-		),
-		len(field_order),
+	# Move Quantity and Rate, then Plate Details, before Description. Frappe
+	# treats each Section Break as the start of a new block, so Plate Details
+	# must be repositioned separately from the preceding Quantity and Rate block.
+	field_order = move_section_before(
+		field_order, QUANTITY_SECTION, DESCRIPTION_SECTION, field_type_by_name
 	)
+	if "custom_plate_details_section" in field_order:
+		field_order = move_section_before(
+			field_order,
+			"custom_plate_details_section",
+			DESCRIPTION_SECTION,
+			field_type_by_name,
+		)
 
-	# Move the entire Quantity and Rate block, including Plate Details, as one
-	# unit. Description and its child fields follow immediately after it.
-	field_order = (
-		field_order[:description_start]
-		+ field_order[quantity_start:quantity_end]
-		+ field_order[description_start:quantity_start]
-		+ field_order[quantity_end:]
-	)
-
-	setter_name = f"{DOCTYPE}-main-field_order"
 	value = json.dumps(field_order)
+	setter_name = f"{DOCTYPE}-main-field_order"
+	if value == json.dumps([field.fieldname for field in fields if field.fieldname]):
+		return
+
 	if frappe.db.exists("Property Setter", setter_name):
 		frappe.db.set_value("Property Setter", setter_name, "value", value, update_modified=False)
 		frappe.clear_cache(doctype=DOCTYPE)
@@ -70,3 +62,28 @@ def execute():
 			validate_fields_for_doctype=False,
 		)
 	print("Moved Purchase Order quantity, rate, and plate fields above Description")
+
+
+def move_section_before(field_order, section_name, target_section, field_type_by_name):
+	"""Move one Section Break and its fields immediately before another section."""
+	try:
+		section_start = field_order.index(section_name)
+		target_start = field_order.index(target_section)
+	except ValueError:
+		return field_order
+
+	if section_start < target_start:
+		return field_order
+
+	section_end = next(
+		(
+			index
+			for index, fieldname in enumerate(field_order[section_start + 1 :], start=section_start + 1)
+			if field_type_by_name.get(fieldname) == "Section Break"
+		),
+		len(field_order),
+	)
+	section_fields = field_order[section_start:section_end]
+	remaining = field_order[:section_start] + field_order[section_end:]
+	target_start = remaining.index(target_section)
+	return remaining[:target_start] + section_fields + remaining[target_start:]
