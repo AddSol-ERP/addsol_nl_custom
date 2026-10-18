@@ -262,9 +262,14 @@ def get_available_plates(warehouse=None, search=None, limit_start=0, limit_page_
 
 	codes = [row.item_code for row in items]
 
-	# 2. the plates behind just those items. Ordered to match the item order so
-	#    the UI never has to re-sort, and sized by what the operator asked for
-	#    rather than by a page length that no longer describes them.
+	# 2. the plates behind just those items.
+	#
+	# NO `FIELD(i.name, ...)`. pymysql escapes a tuple to `('a', 'b')`, so that
+	# call reaches MariaDB as a ROW VALUE operand and a scalar function rejects
+	# it with errno 1241 "Operand should contain 1 column(s)". The order is
+	# irrelevant here anyway: `by_item` below buckets the rows and the groups are
+	# emitted in `items` order, so the page's item ordering is preserved without
+	# the database having to reproduce it.
 	plates = frappe.db.sql(
 		f"""
 		SELECT
@@ -277,7 +282,7 @@ def get_available_plates(warehouse=None, search=None, limit_start=0, limit_page_
 			(COALESCE(s.custom_weight_kg, 0) > 0 AND COALESCE(s.warehouse, '') != '') AS can_cut
 		{FROM_JOIN}
 			AND i.name IN %(codes)s
-		ORDER BY FIELD(i.name, %(codes)s), s.name ASC
+		ORDER BY i.name ASC, s.name ASC
 		""",
 		{**values, "codes": tuple(codes)},
 		as_dict=True,
