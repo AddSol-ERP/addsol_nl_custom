@@ -336,10 +336,10 @@ Traps that carried over into the new flow:
 
 ## Purchase Order item layout (2026-10-18)
 
-`patches/v1_0/setup_purchase_order_item_layout.py` runs from `after_sync` so
-fresh installs and migrations both put the Quantity and Rate block (including
-the conditional Plate Details section) before Description. It builds the
-Property Setter's full `field_order` from live metadata and moves the blocks
-without assuming a fixed ERPNext field list. Plate Custom Fields remain sourced
-from `tools/generate_plate_custom_fields.py`; Rate per Kg is editable in the
-expanded row, not shown as an always-visible grid column.
+`patches/v1_0/setup_purchase_order_item_layout.py` runs from both `after_sync`
+(fresh install) and `after_migrate` (regular migrations) to put the Quantity
+and Rate block, including conditional Plate Details, before Description. It
+builds the Property Setter's full `field_order` from live metadata and moves
+the blocks without assuming a fixed ERPNext field list. Plate Custom Fields
+remain sourced from `tools/generate_plate_custom_fields.py`; Rate per Kg is
+editable in the expanded row, not shown as an always-visible grid column.

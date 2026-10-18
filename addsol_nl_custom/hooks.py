@@ -106,6 +106,7 @@ after_sync = [
 	"addsol_nl_custom.patches.v1_0.setup_plate_defaults.execute",
 	"addsol_nl_custom.patches.v1_0.setup_purchase_order_item_layout.execute",
 ]
+after_migrate = "addsol_nl_custom.patches.v1_0.setup_purchase_order_item_layout.execute"
 
 # Uninstallation
 # ------------

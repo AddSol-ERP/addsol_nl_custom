@@ -12,9 +12,10 @@ QUANTITY_SECTION = "quantity_and_rate"
 def execute():
 	"""Reorder the live fields while preserving the rest of this site's layout.
 
-	This runs after fixture sync on both install and migrate. Rebuilding the
-	field order from live metadata avoids pinning this customization to one
-	ERPNext release's full list of Purchase Order Item fields.
+	This runs after fixture sync on install and from the after_migrate hook.
+	Rebuilding the field order from live metadata avoids pinning this
+	customization to one ERPNext release's full list of Purchase Order Item
+	fields.
 	"""
 	if not frappe.db.exists("DocType", DOCTYPE):
 		return
