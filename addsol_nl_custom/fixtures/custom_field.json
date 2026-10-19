@@ -3748,5 +3748,47 @@
   "translatable": 0,
   "unique": 0,
   "width": null
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "custom_document_attachments",
+  "dt": "Purchase Receipt",
+  "fieldname": "custom_document_attachments",
+  "label": "Attached Documents",
+  "fieldtype": "HTML",
+  "insert_after": "custom_total_est_weight_kg",
+  "options": "",
+  "hidden": 0,
+  "read_only": 0,
+  "print_hide": 1,
+  "collapsible": 0
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "custom_document_attachments",
+  "dt": "Quality Inspection",
+  "fieldname": "custom_document_attachments",
+  "label": "Attached Documents",
+  "fieldtype": "HTML",
+  "insert_after": "inspection_type",
+  "options": "",
+  "hidden": 0,
+  "read_only": 0,
+  "print_hide": 1,
+  "collapsible": 0
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "custom_document_attachments",
+  "dt": "Stock Entry",
+  "fieldname": "custom_document_attachments",
+  "label": "Attached Documents",
+  "fieldtype": "HTML",
+  "insert_after": "remarks",
+  "options": "",
+  "hidden": 0,
+  "read_only": 0,
+  "print_hide": 1,
+  "collapsible": 0
  }
 ]

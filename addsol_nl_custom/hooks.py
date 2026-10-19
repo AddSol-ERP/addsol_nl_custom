@@ -51,11 +51,17 @@ app_license = "mit"
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
 doctype_js = {
+	# Supporting documents. One script for all four forms, and it reads the
+	# allowed types from erpnext_ui.ui_documents.get_attachment_config rather
+	# than holding its own list -- the React panel calls the same endpoint, and a
+	# duplicated extension list is the one thing that would drift silently.
 	"Item": "public/js/item.js",
 	"Plate Offcut": "public/js/plate_offcut.js",
 	"Purchase Order": "public/js/purchase_weight_pricing.js",
 	"Purchase Receipt": "public/js/purchase_weight_pricing.js",
 	"Serial No": "public/js/serial_no.js",
+	"Stock Entry": "public/js/document_attachments.js",
+	"Quality Inspection": "public/js/document_attachments.js",
 }
 
 # Svg Icons

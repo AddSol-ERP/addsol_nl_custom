@@ -196,6 +196,17 @@
    "options": "Plate Offcut",
    "print_hide": 1,
    "read_only": 1
+  },
+  {
+   "fieldname": "custom_document_attachments",
+   "fieldtype": "HTML",
+   "label": "Attached Documents",
+   "insert_after": "stock_entry",
+   "options": "",
+   "hidden": 0,
+   "read_only": 0,
+   "print_hide": 1,
+   "collapsible": 0
   }
  ],
  "index_web_pages_for_search": 1,

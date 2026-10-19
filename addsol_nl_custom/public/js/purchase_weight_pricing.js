@@ -85,6 +85,14 @@ for (const parent_doctype of ["Purchase Order", "Purchase Receipt"]) {
 	frappe.ui.form.on(parent_doctype, {
 		refresh(frm) {
 			refresh_weight_pricing_flags(frm);
+		// `doctype_js` is a dict, so this file owns Purchase Receipt and the attachments
+		// panel cannot claim it. It lives in document_attachments.js and is
+		// mounted from here. Guarded because script load order is not
+		// guaranteed; this runs at form refresh, long after every bundle loads.
+		if (window.addsol_document_attachments) {{
+			window.addsol_document_attachments.mount("Purchase Receipt");
+		}}
+
 		},
 		// A different supplier can mean a different going rate, so lines still
 		// empty get offered one again.

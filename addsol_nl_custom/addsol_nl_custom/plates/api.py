@@ -89,6 +89,13 @@ def estimate_offcut_weights(source_serial_no, rows) -> dict:
 
 	# The same scrap the save will derive, so the preview and the save can
 	# never disagree about how much of the plate is left over.
+	# The smallest offcut this grade keeps, so the form can say "too small" on
+	# the row instead of letting the save refuse it. Read through the SAME
+	# function `check_offcut_fits` calls, so the threshold here and the threshold
+	# enforced at save cannot drift apart. Zero means "not configured", which the
+	# client treats as no check rather than as "nothing may be kept".
+	min_length, min_width = cutting.minimum_offcut(details["grade"])
+
 	scrap_weight_kg = cutting.auto_scrap_weight(details["weight"], weights)
 
 	totals = cutting.offcut_totals(
@@ -116,6 +123,8 @@ def estimate_offcut_weights(source_serial_no, rows) -> dict:
 		"source_length_mm": details["length_mm"],
 		"source_width_mm": details["width_mm"],
 		"source_thickness_mm": details["thickness_mm"],
+		"min_offcut_length_mm": min_length,
+		"min_offcut_width_mm": min_width,
 	}
 
 

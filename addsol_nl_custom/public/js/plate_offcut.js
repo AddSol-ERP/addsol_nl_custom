@@ -27,6 +27,15 @@ frappe.ui.form.on("Plate Offcut", {
 	// Straight away on load - a reopened draft must show its numbers without
 	// the operator having to touch a field first.
 	refresh: function (frm) {
+		// `doctype_js` is a dict, so this file owns Plate Offcut and the attachments
+		// panel cannot claim it. It lives in document_attachments.js and is
+		// mounted from here. Guarded because script load order is not
+		// guaranteed; this runs at form refresh, long after every bundle loads.
+		if (window.addsol_document_attachments) {{
+			window.addsol_document_attachments.mount("Plate Offcut");
+		}}
+
+
 		// Only an Active serial can be cut; the server refuses the rest, and
 		// this keeps the dropdown from offering plates that cannot be chosen.
 		// Opened from an Item, the list narrows to that Item's own serials.
