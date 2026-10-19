@@ -223,7 +223,7 @@ class TestPlateItem(FrappeTestCase):
 
 		self.assertEqual(frappe.db.get_value("Item", item.name, "stock_uom"), "Kg")
 
-	def test_b4_locks_the_dimensions_once_the_item_is_used(self):
+	def test_b4_allows_dimension_changes_after_the_item_is_used(self):
 		item = make_plate_item()
 		self.assertFalse(item_has_transactions(item.name))
 
@@ -253,8 +253,8 @@ class TestPlateItem(FrappeTestCase):
 		reloaded = frappe.get_doc("Item", item.name)
 		reloaded.custom_length_mm = 3000
 
-		with self.assertRaises(frappe.ValidationError):
-			reloaded.save()
+		reloaded.save()
+		self.assertEqual(reloaded.custom_length_mm, 3000)
 
 	def test_b4_lets_an_unused_item_change_its_dimensions(self):
 		item = make_plate_item()

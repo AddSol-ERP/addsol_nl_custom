@@ -10,7 +10,6 @@ frappe.ui.form.on("Item", {
 	refresh: function (frm) {
 		if (!is_weighed(frm)) return;
 
-		lock_dimensions_if_used(frm);
 		show_weight(frm);
 		show_create_offcut(frm);
 	},
@@ -85,28 +84,6 @@ function show_weight(frm) {
 			// formula needs but does not have. It has already messaged the
 			// reason, so just clear the stale number.
 			frm.set_value("custom_estimated_weight", 0);
-		},
-	});
-}
-
-// The server refuses to resize an Item that is in use, so do not even offer
-// the fields once that is the case.
-function lock_dimensions_if_used(frm) {
-	if (frm.is_new()) {
-		["custom_thickness_dropdown", "custom_length_mm", "custom_width_mm"].forEach((f) =>
-			frm.set_read_only(f, false)
-		);
-		return;
-	}
-
-	frappe.call({
-		method: "addsol_nl_custom.addsol_nl_custom.plates.item_hooks.get_item_has_transactions",
-		args: { item_code: frm.doc.name },
-		callback: function (r) {
-			const locked = !!(r && r.message);
-			["custom_thickness_dropdown", "custom_length_mm", "custom_width_mm"].forEach((f) =>
-				frm.set_read_only(f, locked)
-			);
 		},
 	});
 }

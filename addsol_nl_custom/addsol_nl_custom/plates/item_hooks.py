@@ -5,19 +5,9 @@ import frappe
 from frappe import _
 
 from addsol_nl_custom.addsol_nl_custom.plates.grouping import is_weighed_group
-from addsol_nl_custom.addsol_nl_custom.plates.item_defaults import (
-	apply_plate_item_defaults,
-	item_has_transactions,
-)
+from addsol_nl_custom.addsol_nl_custom.plates.item_defaults import apply_plate_item_defaults
 from addsol_nl_custom.addsol_nl_custom.plates.utils import build_plate_description, build_plate_item_name
 from addsol_nl_custom.addsol_nl_custom.plates.weight import compute_theoretical_weight, get_item_thickness_mm
-
-# The fields that decide an Item's size. If any of them moves on an Item that
-# is already in use, the size is frozen.
-DIMENSION_FIELDS = ("item_group", "custom_thickness_dropdown", "custom_length_mm", "custom_width_mm")
-
-DIMENSION_LOCK_MESSAGE = "Dimensions cannot be changed because this item has transactions. Create a new item."
-
 
 def item_autoname(doc, method):
 	"""Name a weighed Item from its grade, thickness, length and width.
@@ -57,7 +47,6 @@ def item_validate(doc, method):
 		doc.name = expected_name
 		doc.item_code = expected_name
 	else:
-		lock_dimensions(doc)
 		if doc.name != expected_name:
 			frappe.msgprint(
 				f"Item name is {doc.name} but its dimensions give {expected_name}. "
@@ -110,27 +99,3 @@ def set_estimated_weight(doc, thickness_mm, length_mm, width_mm) -> None:
 	doc.set("custom_estimated_weight", weight)
 	doc.set("weight_per_unit", weight)
 	doc.set("weight_uom", "Kg")
-
-
-def lock_dimensions(doc) -> None:
-	"""Stop the size of an Item that is already in use from moving.
-
-	A purchase order, a receipt or a bill of materials quotes the old size, and
-	renaming the Item would leave all of them pointing at a plate whose
-	dimensions no longer match.
-	"""
-	changed = [field for field in DIMENSION_FIELDS if doc.has_value_changed(field)]
-	if not changed:
-		return
-
-	if item_has_transactions(doc.name):
-		frappe.throw(
-			DIMENSION_LOCK_MESSAGE,
-			title="Dimensions cannot be changed",
-		)
-
-
-@frappe.whitelist()
-def get_item_has_transactions(item_code) -> bool:
-	"""Whether an Item is already in use, so the desk can lock its dimensions."""
-	return item_has_transactions(item_code)
