@@ -159,7 +159,7 @@ Keeping the trap straight for the next edit:
   blocked the submit. The hook must stay non-blocking; retrying after commit is
   the guarantee, not failing the receipt.
 
-## Plate Offcut replaces the Work Order cutting flow (2026-10-17)
+## Plate Offcut replaces the Work Order cutting flow (2026-10-17, cutting model reworked 2026-10-20)
 
 The Work Order/Job Card coupled flow is gone, deleted outright (clean
 cutover, no data preserved): `Plate Cutting Record`, `Plate Cutting Offcut`,
@@ -172,51 +172,100 @@ Fields, drops both tables and removes the DocType records on existing sites.
 Its replacement is the submittable `Plate Offcut` DocType
 (`format:OFC-{YY}-{#####}` -> `OFC-26-00045`, Manufacturing User/Manager),
 entered from its own list, a
-Create Offcut button on Serial No, or the same button on Item:
+Create Offcut button on Serial No, or the same button on Item. The operator
+always provides the offcut dimensions; what the offcuts and the scrap do not
+take is one remainder piece, and only the weight actually cut for the order
+becomes its cost. One cutting is made for one order, so the Project is
+mandatory on every Plate Offcut:
 
 - **validate** reads the plate through `cutting.get_offcut_details` (Active,
   weighed, in a warehouse - a serial with no warehouse throws, because a
-  Repack row without `s_warehouse` is an inbound row), checks each cut fits
-  and meets the Item Group minimums, recomputes every row, then auto-fills
-  `scrap_weight_kg = source - sum(offcuts)` (floor 0, `auto_scrap_weight`)
-  and runs `compute_totals`, which refuses an overage beyond
-  `OVERAGE_TOLERANCE`. Scrap is not an input; zero scrap means no scrap row
-  and no scrap Item required.
-- **on_submit** (`create_offcut_stock`) reuses or creates one `offcut_item`
-  per size via `get_or_create_offcut_item` (`<Item Group>-<T>x<L>x<W>`),
-  creates one Batch per offcut (`offcut_batch_series`, heat/MTC/grade/ratio/
-  cost stamped - grade read from the Item's `item_group`, never the batch
-  label), reserves a Serial No per offcut, inserts AND submits a **Repack**
-  Stock Entry in one go, then stamps `custom_weight_kg` and
-  `custom_source_serial_no` onto the new serials.
-- The Repack takes the plate out of its own warehouse and puts offcuts and
-  scrap back **into the same warehouse**; full serial consumption, qty 1 per
-  piece. Destination rows set `set_basic_rate_manually=1` with **both**
-  `basic_rate` and `basic_amount`: `set_basic_rate` skips manual rows so
-  `basic_amount` would stay 0, and `validate_repack_entry` refuses a Repack
-  with more than one finished item unless every row is manual. No work
-  order, no BOM, no header/target warehouses, no `fg_completed_qty`.
+  Repack row without `s_warehouse` is an inbound row), insists on a Project
+  (`check_project`, so an API or an import cannot slip past the form's
+  mandatory), checks each cut fits the plate and meets the Item Group
+  minimums, recomputes every row, then runs `compute_totals`, which derives
+  `consumed_weight_kg = source - offcuts - scrap` and refuses an overage
+  beyond `OVERAGE_TOLERANCE`. **Scrap is now an input**, not a computed
+  balance: `scrap_weight_kg` defaults to 0 and is what the operator books
+  as waste; a negative value is refused, and zero scrap needs no scrap Item
+  at all. The removed `auto_scrap_weight` used to fill this field as the
+  remainder, which is no longer what the field means.
+- **on_submit** (`create_offcut_stock`) reuses or creates one Item per cut
+  piece, creates one Batch per piece (`offcut_batch_series`, heat/MTC/
+  grade/ratio/cost stamped - grade read from the Item's `item_group`, never
+  the batch label), reserves a Serial No per piece, inserts AND submits a
+  **Repack** Stock Entry in one go, and - when anything is left after the
+  offcuts and the scrap - creates the remainder piece and submits a second
+  Stock Entry, a **Material Issue**, that spends it against the Project.
+  Finally it stamps `custom_weight_kg` and `custom_source_serial_no` onto
+  every new serial.
+- Offcuts may be **rectangles or circles**. A rectangle keeps the name
+  `<Item Group>-<T>x<L>x<W>`; a circle is entered by diameter, is named
+  `<Item Group>-<T>-D<d>`, and weighs what the square across it weighs
+  times pi/4 (`theoretical_offcut_weight`, applied before the batch's
+  actual-to-theoretical ratio). The two shapes can never collide on an
+  Item name, and `check_circle_fits` refuses a diameter that is wider than
+  either side of the plate.
+- The **remainder piece** is one Item per piece, never reused, named
+  `<Item Group>-<T>-<Project>-<Running No>` from the Plate Settings series
+  `remainder_naming_series` (default `RMD-.{project}.-.#####`). The running
+  number counts per Project (`next_remainder_running_no`), so two cuttings
+  for one order read `-00001`, `-00002`, and another order starts again at
+  `-00001`. The piece gets its own Batch and Serial, points back at the
+  plate it was cut from, and stays plate stock - the Item carries
+  `custom_is_remainder` and `custom_remainder_project` but **not**
+  `custom_is_offcut`, so the Plate Stock Register keeps listing it as stock.
+- The Repack takes the plate out of its own warehouse and puts offcuts, the
+  remainder and the scrap back **into the same warehouse**; full serial
+  consumption, qty 1 per piece. Destination rows set
+  `set_basic_rate_manually=1` with **both** `basic_rate` and
+  `basic_amount`: `set_basic_rate` skips manual rows so `basic_amount`
+  would stay 0, and `validate_repack_entry` refuses a Repack with more than
+  one finished item unless every row is manual. The remainder row is priced
+  at the consumed value, so the Material Issue that follows spends exactly
+  that. No work order, no BOM, no header/target warehouses, no
+  `fg_completed_qty`.
+- The **Material Issue** carries the Project on its row, which is what puts
+  the consumed value on the order in the general ledger; it uses the same
+  legacy `use_serial_batch_fields` pattern as the Repack, so
+  `make_bundle_using_old_serial_batch_fields` turns it into a Serial and
+  Batch Bundle on submit. When the offcuts take the whole plate there is no
+  remainder, no issue, and the Repack is just plate out plus pieces in.
+- `cutting.insert_piece_item` is the one place that puts a piece Item into
+  stock, and `item_autoname`/`item_validate` skip cutting-generated Items
+  (`is_cutting_generated` = `custom_is_offcut` or `custom_is_remainder`):
+  they already carry their final name and their size is weightless, so the
+  ordinary rectangle naming and weight maths must not claim them.
 - **Frappe runs `db_update()` + `update_children()` before `on_submit`** -
-  anything decided while submitting (the stock_entry name, batch/serial
-  names, offcut_item) must be written explicitly with `self.db_update()` /
-  `row.db_update()` or it exists only in memory. The old flow had exactly
-  this latent bug.
-- **on_cancel** cancels the Repack (ERPNext's own refusal to cancel once an
-  offcut serial has moved stays in force), force-deletes the offcut Batches
-  and blanks each row's `serial_no`/`batch_no`, so an amend/resubmit
-  reserves fresh names instead of tripping over the cancelled attempt's
-  inactive serials.
-- `plates/api.py:estimate_offcut_weights(source_serial_no, rows)` powers the
-  live preview in `public/js/plate_offcut.js` (debounced, scrap included,
-  `allow_guest=False` plus an explicit
+  anything decided while submitting (the stock_entry name, the
+  material_issue name, batch/serial names, offcut_item, remainder_item)
+  must be written explicitly with `self.db_update()` / `row.db_update()` or
+  it exists only in memory. The old flow had exactly this latent bug.
+- **on_cancel** cancels the Material Issue first - while it stood the
+  remainder serial was out of stock and the Repack could not have taken it
+  back - then the Repack (ERPNext's own refusal to cancel once an offcut
+  serial has moved stays in force), force-deletes the piece Batches and
+  blanks each row's `serial_no`/`batch_no` plus the remainder fields, so an
+  amend/resubmit reserves fresh names instead of tripping over the cancelled
+  attempt's inactive serials.
+- `plates/api.py:estimate_offcut_weights(source_serial_no, rows,
+  scrap_weight_kg=None)` powers the live preview in
+  `public/js/plate_offcut.js` (debounced, scrap included, `allow_guest=False`
+  plus an explicit
   `has_permission("Plate Offcut", "write", throw=True)`, row names echoed
-  back). The generated Stock Entry is an implementation detail
-  (`flags.ignore_permissions`); the permission gate is submitting the Plate
-  Offcut itself.
+  back). It reports the scrap and the consumed weight and value alongside
+  the offcuts, so the operator sees the order's cost before saving. A line
+  still being drawn (a rectangle with no width, a circle with no diameter)
+  returns zeroes rather than asking for the weight of a zero-size plate,
+  which the formula refuses to guess. The generated Stock Entries are an
+  implementation detail (`flags.ignore_permissions`); the permission gate is
+  submitting the Plate Offcut itself.
 - `tests/test_plate_offcut.py` covers submit end to end - Repack shape,
-  manual rates, serial/batch traceability, scrap balance, zero-scrap,
-  item reuse, cancel, amend - and `tests/test_cutting_estimate.py` pins the
-  preview against the real post-insert totals.
+  manual rates, serial/batch traceability, scrap as input, circles, the
+  remainder Item/serial/batch, the Material Issue against the Project, the
+  per-Project running numbers, cancel (Material Issue then Repack), amend -
+  and `tests/test_cutting_estimate.py` pins the preview against the real
+  post-insert totals.
 
 Traps that carried over into the new flow:
 
@@ -241,7 +290,70 @@ Traps that carried over into the new flow:
   `parse_naming_series` calls `doc.get()` on every literal series part, so
   `OFB-.YY.-.#####` dies on "OFB" when handed a string. Both
   `make_offcut_batch` and `cutting.reserve_serial_no` pass their dict (the
-  first production submit of the old flow crashed exactly here).
+  first production submit of the old flow crashed exactly here). The
+  remainder naming series uses the same mechanism: `make_autoname(series,
+  doc={"project": project})` with the default `RMD-.{project}.-.#####`.
+  `parse_naming_series` splits the template on `.`, so `{project}` must be a
+  **whole** dot-separated part, and the running number is the digits the
+  expanded name ends with (`re.search(r"\d+$", ...)`).
+- **`get_setting` must treat a blank Single value as unset, not as a choice.**
+  `frappe.db.get_single_value` returns `''` — never `None` — for a Single
+  DocType field nobody has saved yet. The old guard tested only `is not None`,
+  so a field shipped with a `default` in its DocType JSON silently resolved to
+  `''` on any site that had not opened the form. `remainder_naming_series` was
+  blank that way, `make_autoname('')` minted bare numbers under the **empty**
+  series key `''`, and every Project drew from one global counter — the two
+  running-number tests (`-00001`) failed because an earlier test had advanced
+  that shared counter. `settings.py:get_setting` now falls through to the
+  default when the stored value is blank; an empty string is never meaningful
+  for these settings.
+- **`tabSeries` counters survive a test rollback.** Even with the naming fixed,
+  a per-project remainder number is a row in `tabSeries`, so a Project reused by
+  name across tests inherits whatever counter an earlier test or run left, and
+  the first piece is no longer `-00001`. Worse, a Project's own autoname counter
+  IS rolled back, so every test re-collides on the same Project name and hence
+  the same series key. `tests/test_cutting_estimate.py:make_project` deletes the
+  project's Series row on each call to make the starting number deterministic; a
+  test that asserts an absolute running number must reset it first.
+- **A form field filled only by the live preview never reaches a submitted
+  document.** `source_plate_text` (the Item + Batch spelled out under the serial)
+  is written two ways: `set_source` on save, and the JS estimate reply while the
+  form is open. The JS path bails on `frm.doc.docstatus`, so a submitted cutting
+  shows only what its own save stored — and cuttings filed before the field
+  existed stored nothing. Filling such a field needs a backfill patch, and it
+  **cannot reuse `get_source_details`**: that reader throws on a non-Active
+  serial, and a submitted cutting's plate is by then `Consumed`. Hence
+  `cutting.plate_text_for` — the formatting is split out so the live reader and
+  the patch (`patches/v1_0/backfill_offcut_plate_text.py`) spell a plate
+  identically while the patch reads the Serial No directly.
+- Cutting-generated Items are exempt from the ordinary Item naming and
+  weight rules via `is_cutting_generated` (`custom_is_offcut` or
+  `custom_is_remainder`) in `item_hooks.py`. Without it `item_autoname`
+  renames the remainder Item to the rectangle name and `item_validate`
+  fails the weight maths on a piece that has no L/W. They still get
+  `apply_plate_item_defaults` (batch + serial series).
+- Legacy `use_serial_batch_fields` works for a **Material Issue** exactly as
+  it does for the Repack: `stock_controller.make_bundle_using_old_serial_batch_fields`
+  runs on submit and turns the row's `serial_no`/`batch_no` into a Serial and
+  Batch Bundle, so the automatic issue needs no bundle of its own.
+- **An accounting-dimension row must belong to the Stock Entry's company.**
+  Carrying `project` on the Material Issue row makes ERPNext run
+  `accounts_controller.validate_company_in_accounting_dimension`, which throws
+  "Project: X does not belong to the Company: Y" when the Project's `company`
+  differs from the warehouse's. `check_project` now catches it at validate
+  with a plain message; a test helper that builds a Project must set
+  `company` explicitly (`make_project` pins it, and repairs a leftover that
+  carries another company's default).
+- The child `shape` column arrives empty on rows cut before circles existed;
+  `cutting.is_circle` reads blank as Rectangle, and the post-model-sync
+  `backfill_offcut_shape` patch stamps those rows explicitly so nothing has
+  to rely on the fallback. It is post- not pre-model-sync because the column
+  is created by the DocType sync that runs first.
+- `length_mm`/`width_mm` on Plate Offcut Item lost their `reqd` when circles
+  arrived (a circle has neither): they are now `mandatory_depends_on` per
+  shape, which is only a form convenience. The server must keep enforcing it
+  through `check_offcut_fits`/`check_circle_fits`, because an API or an
+  import never sees the desk's conditional mandatory.
 - A DocType JSON edit reaches a site only through `bench migrate` (Frappe
   compares the file hash against `tabDocType.migration_hash`, not its
   `modified` stamp); `.py` and `hooks.py` edits need a `bench restart`,

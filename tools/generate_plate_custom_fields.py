@@ -27,6 +27,19 @@ FIELD_SPECS = [
 	 {"read_only": 1, "description": "Set by the cutting process, not by hand."}),
 	("Item", "custom_source_item", "Link", "Source Item", "Item",
 	 {"read_only": 1, "depends_on": "eval:doc.custom_is_offcut"}),
+	("Item", "custom_diameter_mm", "Float", "Diameter (mm)", None,
+	 {"read_only": 1, "precision": "3", "depends_on": "eval:doc.custom_is_offcut",
+	  "description": "Set by the cutting process on a circular offcut. A round cut has no "
+	                 "length and width, so this is the only size it carries."}),
+	("Item", "custom_is_remainder", "Check", "Is Remainder", None,
+	 {"read_only": 1,
+	  "description": "Set by the cutting process on the piece a plate is cut down to. It is "
+	                 "not an offcut: the piece stays regular plate stock and its weight is "
+	                 "issued against the Project that asked for the cut."}),
+	("Item", "custom_remainder_project", "Link", "Remainder Project", "Project",
+	 {"read_only": 1, "depends_on": "eval:doc.custom_is_remainder",
+	  "description": "The Project this remainder was cut for. Named into the Item so two "
+	                 "projects never share a remainder Item."}),
 
 	# ------------------------------------------------- C1 Item Group additions
 	("Item Group", "custom_min_offcut_length_mm", "Float", "Minimum Offcut Length (mm)", None,
@@ -144,6 +157,9 @@ FIELD_SPECS = [
 INSERT_AFTER = {
 	("Item", "custom_is_offcut"): "custom_width_mm",
 	("Item", "custom_source_item"): "custom_is_offcut",
+	("Item", "custom_diameter_mm"): "custom_width_mm",
+	("Item", "custom_is_remainder"): "custom_source_item",
+	("Item", "custom_remainder_project"): "custom_is_remainder",
 	("Item Group", "custom_is_weighed_grade"): "custom_formula",
 	("Item Group", "custom_min_offcut_length_mm"): "custom_serial_no_series",
 	("Item Group", "custom_min_offcut_width_mm"): "custom_min_offcut_length_mm",

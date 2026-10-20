@@ -79,6 +79,57 @@ def build_plate_item_name(item_group, thickness_mm, length_mm, width_mm) -> str:
 	return "-".join([item_group, "x".join(dimensions)])
 
 
+def build_circle_item_name(item_group, thickness_mm, diameter_mm) -> str:
+	"""Name a circular offcut from its grade and its diameter.
+
+	Format: <Item Group>-<T>-D<d>, e.g. MS Plate 250-10-D400. The D marks it
+	as a round cut, so it can never collide with a rectangular offcut of the
+	same numbers - and it reads as what it is in a list of pieces.
+	"""
+	thickness = require_thickness(item_group, thickness_mm)
+
+	if diameter_mm in (None, ""):
+		frappe.throw(_("Diameter is required to name a circular offcut."))
+
+	return "-".join([item_group, f"{thickness}-D{fmt_dim(diameter_mm)}"])
+
+
+def build_remainder_item_name(item_group, thickness_mm, project, running_no) -> str:
+	"""Name the piece a plate is cut down to, after its order and its number.
+
+	Format: <Item Group>-<T>-<Project>-<running number>, e.g.
+	MS Plate 250-10-PROJ-00001.
+
+	One Item per remainder piece - never reused - because two cuttings for the
+	same project leave two different pieces, each with its own weight, batch
+	and serial. The project is in the name so a remainder can never be picked
+	up by another order's report by accident, and the running number keeps the
+	pieces of one project apart without a human having to invent a name.
+	"""
+	thickness = require_thickness(item_group, thickness_mm)
+
+	project = (project or "").strip()
+	if not project:
+		frappe.throw(_("A remainder piece is named after the Project it is cut for."))
+
+	running_no = (str(running_no).strip() if running_no is not None else "")
+	if not running_no:
+		frappe.throw(_("A remainder piece needs its running number."))
+
+	return "-".join([item_group, f"{thickness}-{project}-{running_no}"])
+
+
+def require_thickness(item_group, thickness_mm) -> str:
+	"""The thickness half of a plate name, which is the part that must exist."""
+	if not item_group:
+		frappe.throw(_("Item Group is required to name a plate item."))
+
+	if thickness_mm in (None, ""):
+		frappe.throw(_("Thickness is required to name a plate item."))
+
+	return fmt_dim(thickness_mm)
+
+
 def build_plate_description(thickness_mm, length_mm, width_mm) -> str:
 	"""Human readable size, e.g. '10 x 2500 x 1250 mm'."""
 	dimensions = [fmt_dim(value) for value in (thickness_mm, length_mm, width_mm) if value not in (None, "")]

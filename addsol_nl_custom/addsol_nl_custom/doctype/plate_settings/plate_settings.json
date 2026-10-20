@@ -14,6 +14,7 @@
   "over_billing_allowance_pct",
   "section_cutting",
   "offcut_batch_series",
+  "remainder_naming_series",
   "scrap_item",
   "column_break_cutting",
   "min_offcut_length_mm",
@@ -69,6 +70,13 @@
    "fieldname": "offcut_batch_series",
    "fieldtype": "Data",
    "label": "Offcut Batch Series"
+  },
+  {
+   "default": "RMD-.{project}.-.#####",
+   "description": "Naming series for the running number of each remainder piece. {project} expands to the Plate Offcut's Project, so every project counts its own pieces: the first piece cut for PROJ is numbered 00001.",
+   "fieldname": "remainder_naming_series",
+   "fieldtype": "Data",
+   "label": "Remainder Naming Series"
   },
    {
     "description": "Item used for scrap, in Kg, valued at the source batch's cost per kg. Set by the setup patch once the Item exists; no DocType default, because a default pointing at an Item that may not exist yet fails Frappe's link check while the Single is first created.",

@@ -37,29 +37,32 @@ def get_theoretical_weight(
 
 
 @frappe.whitelist(allow_guest=False)
-def estimate_offcut_weights(source_serial_no, rows) -> dict:
+def estimate_offcut_weights(source_serial_no, rows, scrap_weight_kg=None) -> dict:
 	"""Preview every offcut's weight and the cutting's total while the form is open.
 
-	public/js/plate_offcut.js asks for this whenever a dimension or a row
-	changes. It runs the same functions the save will run -
-	cutting.get_offcut_details, cutting.compute_offcut, cutting.auto_scrap_weight
-	and cutting.offcut_totals - so the preview is not a second implementation
-	that can drift; it is the same arithmetic, asked for earlier. The save
-	keeps the say, and this deliberately does not reject a cutting that runs
-	over - it reports over_by_kg and lets the operator decide.
+	public/js/plate_offcut.js asks for this whenever a dimension, a shape or a
+	row changes. It runs the same functions the save will run -
+	cutting.get_offcut_details, cutting.compute_offcut and
+	cutting.offcut_totals - so the preview is not a second implementation that
+	can drift; it is the same arithmetic, asked for earlier. The save keeps
+	the say, and this deliberately does not reject a cutting that runs over -
+	it reports over_by_kg and lets the operator decide.
 
-	`rows` is the offcut lines as JSON: [{"name", "length_mm", "width_mm"}].
-	Each line's `name` is echoed straight back, so a reply that lands after the
-	operator has typed again is recognised and dropped instead of being written
-	onto the wrong row.
+	`rows` is the offcut lines as JSON: [{"name", "shape", "length_mm",
+	"width_mm", "diameter_mm"}]. Each line's `name` is echoed straight back,
+	so a reply that lands after the operator has typed again is recognised and
+	dropped instead of being written onto the wrong row.
 
-	Scrap is not an input: the plate is consumed whole, so the scrap balances
-	the weight automatically and is reported back for the form to show.
+	`scrap_weight_kg` is what the operator booked as scrap. The remainder -
+	the consumed piece the order keeps - is whatever is left after the
+	offcuts and that scrap, and comes back as consumed_weight_kg and
+	consumed_value.
 
-	A line with a length but no width yet returns zeroes rather than asking for
-	the weight of a zero-size plate, which the formula refuses to guess. That
-	line is simply not drawn yet; the save rejects it properly through
-	check_offcut_fits, as it always has.
+	A line still being drawn - a rectangle with no width, a circle with no
+	diameter yet - returns zeroes rather than asking for the weight of a
+	zero-size plate, which the formula refuses to guess. That line is simply
+	not drawn yet; the save rejects it properly through check_offcut_fits, as
+	it always has.
 	"""
 	frappe.has_permission("Plate Offcut", "write", throw=True)
 
@@ -72,8 +75,15 @@ def estimate_offcut_weights(source_serial_no, rows) -> dict:
 		line = frappe._dict(line)
 		estimate = {"name": line.get("name")}
 
-		if frappe.utils.flt(line.length_mm) > 0 and frappe.utils.flt(line.width_mm) > 0:
-			row = frappe._dict({"length_mm": line.length_mm, "width_mm": line.width_mm})
+		if line_is_drawn(line):
+			row = frappe._dict(
+				{
+					"shape": line.shape,
+					"length_mm": line.length_mm,
+					"width_mm": line.width_mm,
+					"diameter_mm": line.diameter_mm,
+				}
+			)
 			cutting.compute_offcut(row, details)
 			estimate.update(
 				theoretical_weight_kg=row.theoretical_weight_kg,
@@ -87,20 +97,20 @@ def estimate_offcut_weights(source_serial_no, rows) -> dict:
 		weights.append(estimate["weight_kg"])
 		values.append(estimate["value"])
 
-	# The same scrap the save will derive, so the preview and the save can
-	# never disagree about how much of the plate is left over.
 	# The smallest offcut this grade keeps, so the form can say "too small" on
 	# the row instead of letting the save refuse it. Read through the SAME
 	# function `check_offcut_fits` calls, so the threshold here and the threshold
 	# enforced at save cannot drift apart. Zero means "not configured", which the
 	# client treats as no check rather than as "nothing may be kept".
+	#
+	# Scrap is NOT derived here any more: it is typed on the form and arrives in
+	# `scrap_weight_kg`, so recomputing it would overwrite what the operator
+	# booked. `auto_scrap_weight` is gone along with the old design.
 	min_length, min_width = cutting.minimum_offcut(details["grade"])
-
-	scrap_weight_kg = cutting.auto_scrap_weight(details["weight"], weights)
 
 	totals = cutting.offcut_totals(
 		source_weight_kg=details["weight"],
-		scrap_weight_kg=scrap_weight_kg,
+		scrap_weight_kg=frappe.utils.flt(scrap_weight_kg),
 		row_weights=weights,
 		row_values=values,
 		cost_per_kg=details["cost_per_kg"],
@@ -108,11 +118,14 @@ def estimate_offcut_weights(source_serial_no, rows) -> dict:
 
 	return {
 		"source_weight_kg": totals["source_weight_kg"],
+		"source_plate_text": details["plate_text"],
 		"rows": previewed,
 		"total_offcut_weight_kg": totals["total_offcut_weight_kg"],
 		"total_offcut_value": totals["total_offcut_value"],
 		"scrap_weight_kg": totals["scrap_weight_kg"],
 		"scrap_value": totals["scrap_value"],
+		"consumed_weight_kg": totals["consumed_weight_kg"],
+		"consumed_value": totals["consumed_value"],
 		"over_by_kg": totals["over_by_kg"],
 		# The plate's own size, straight off `get_offcut_details` above. The
 		# caller draws a scaled cut layout from these, and re-deriving them in
@@ -435,6 +448,12 @@ def get_offcut_stock(search=None, limit_start=0, limit_page_length=20) -> dict:
 	]
 
 	return {"pieces": pieces, "total": int(total)}
+def line_is_drawn(line) -> bool:
+	"""Whether a line carries a size its shape can be weighed at."""
+	if cutting.is_circle(line):
+		return frappe.utils.flt(line.diameter_mm) > 0
+
+	return frappe.utils.flt(line.length_mm) > 0 and frappe.utils.flt(line.width_mm) > 0
 
 
 @frappe.whitelist(allow_guest=False)

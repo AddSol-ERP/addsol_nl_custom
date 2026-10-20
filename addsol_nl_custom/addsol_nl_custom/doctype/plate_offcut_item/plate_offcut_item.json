@@ -7,9 +7,11 @@
  "engine": "InnoDB",
  "field_order": [
   "section_offcut",
+  "shape",
   "length_mm",
   "column_break_offcut",
   "width_mm",
+  "diameter_mm",
   "offcut_item",
   "section_result",
   "theoretical_weight_kg",
@@ -26,24 +28,44 @@
    "label": "Offcut Size"
   },
   {
+   "default": "Rectangle",
+   "description": "Rectangle or Circle. A circle is entered by its diameter alone.",
+   "fieldname": "shape",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Shape",
+   "options": "\nRectangle\nCircle"
+  },
+  {
+   "depends_on": "eval:doc.shape!=='Circle'",
    "description": "Longer side of the offcut, in mm.",
    "fieldname": "length_mm",
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Length (mm)",
-   "reqd": 1
+   "mandatory_depends_on": "eval:doc.shape!=='Circle'"
   },
   {
    "fieldname": "column_break_offcut",
    "fieldtype": "Column Break"
   },
   {
+   "depends_on": "eval:doc.shape!=='Circle'",
    "description": "Shorter side of the offcut, in mm.",
    "fieldname": "width_mm",
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Width (mm)",
-   "reqd": 1
+   "mandatory_depends_on": "eval:doc.shape!=='Circle'"
+  },
+  {
+   "depends_on": "eval:doc.shape==='Circle'",
+   "description": "Diameter of a round offcut, in mm. Its weight is the square across it, times pi/4.",
+   "fieldname": "diameter_mm",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Diameter (mm)",
+   "mandatory_depends_on": "eval:doc.shape==='Circle'"
   },
   {
    "description": "Created on submit, one Item per offcut size. It reuses an existing Item when one already matches.",

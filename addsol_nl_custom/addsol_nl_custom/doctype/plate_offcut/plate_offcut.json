@@ -9,6 +9,8 @@
  "field_order": [
   "section_source",
   "source_serial_no",
+  "source_plate_text",
+  "project",
   "source_item",
   "source_batch",
   "heat_number",
@@ -29,7 +31,19 @@
   "section_totals",
   "total_offcut_weight_kg",
   "total_offcut_value",
+  "column_break_totals",
+  "consumed_weight_kg",
+  "consumed_value",
+  "section_remainder",
+  "remainder_item",
+  "remainder_batch_no",
+  "remainder_serial_no",
+  "column_break_remainder",
+  "remainder_weight_kg",
+  "remainder_value",
   "stock_entry",
+  "custom_document_attachments",
+  "material_issue",
   "amended_from"
  ],
  "fields": [
@@ -48,8 +62,25 @@
    "reqd": 1
   },
   {
+   "description": "The plate spelled out - Item name and Batch - so the operator sees what the serial is without opening it. Filled from the serial, never typed.",
+   "fieldname": "source_plate_text",
+   "fieldtype": "Data",
+   "label": "Source Plate",
+   "read_only": 1
+  },
+  {
+   "description": "The order this plate is cut for. Mandatory on every cutting: whatever is neither an offcut nor scrap is issued against this Project, so only the consumed weight is cost for it.",
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1
+  },
+  {
    "fieldname": "source_item",
    "fieldtype": "Link",
+   "hidden": 1,
    "label": "Source Item",
    "options": "Item",
    "read_only": 1
@@ -57,6 +88,7 @@
   {
    "fieldname": "source_batch",
    "fieldtype": "Link",
+   "hidden": 1,
    "label": "Source Batch",
    "options": "Batch",
    "read_only": 1
@@ -64,6 +96,7 @@
   {
    "fieldname": "heat_number",
    "fieldtype": "Data",
+   "hidden": 1,
    "label": "Heat Number",
    "read_only": 1
   },
@@ -132,12 +165,12 @@
   },
   {
    "bold": 1,
-   "description": "Filled in automatically: the source weight minus the offcuts, so the plate balances exactly (within 0.001 kg).",
+   "default": "0",
+   "description": "What is booked as scrap: entered here, valued at the source cost per kg, and put away in the scrap Item. Leave at 0 when nothing is wasted - the rest of the plate then becomes the remainder piece.",
    "fieldname": "scrap_weight_kg",
    "fieldtype": "Float",
    "label": "Scrap Weight (Kg)",
-   "precision": "3",
-   "read_only": 1
+   "precision": "3"
   },
   {
    "description": "Scrap weight times the source cost per kg.",
@@ -180,21 +213,86 @@
    "read_only": 1
   },
   {
-   "description": "The Repack Stock Entry created on submit: the plate out, the offcuts and the scrap in, all in the plate's own warehouse.",
+   "fieldname": "column_break_totals",
+   "fieldtype": "Column Break"
+  },
+  {
+   "bold": 1,
+   "description": "The plate minus the offcuts minus the scrap: the piece that carries on as this Project's own material.",
+   "fieldname": "consumed_weight_kg",
+   "fieldtype": "Float",
+   "label": "Consumed Weight (Kg)",
+   "precision": "3",
+   "read_only": 1
+  },
+  {
+   "bold": 1,
+   "description": "Consumed weight times the source cost per kg. This is what the Material Issue puts on the Project.",
+   "fieldname": "consumed_value",
+   "fieldtype": "Currency",
+   "label": "Consumed Value",
+   "options": "currency",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_remainder",
+   "fieldtype": "Section Break",
+   "label": "Remainder Piece"
+  },
+  {
+   "description": "Created on submit when anything is consumed: one Item per piece, named <Item Group>-<Thickness>-<Project>-<running number>. It stays plate stock and is issued against the Project.",
+   "fieldname": "remainder_item",
+   "fieldtype": "Link",
+   "label": "Remainder Item",
+   "no_copy": 1,
+   "options": "Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remainder_batch_no",
+   "fieldtype": "Link",
+   "label": "Remainder Batch",
+   "no_copy": 1,
+   "options": "Batch",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remainder_serial_no",
+   "fieldtype": "Link",
+   "label": "Remainder Serial No",
+   "no_copy": 1,
+   "options": "Serial No",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_remainder",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Same as Consumed Weight: the weight of the piece put away under the Remainder Item.",
+   "fieldname": "remainder_weight_kg",
+   "fieldtype": "Float",
+   "label": "Remainder Weight (Kg)",
+   "precision": "3",
+   "read_only": 1
+  },
+  {
+   "description": "Same as Consumed Value: what the remainder piece is put into stock at.",
+   "fieldname": "remainder_value",
+   "fieldtype": "Currency",
+   "label": "Remainder Value",
+   "options": "currency",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "description": "The Repack Stock Entry created on submit: the plate out, the offcuts, the remainder and the scrap in, all in the plate's own warehouse.",
    "fieldname": "stock_entry",
    "fieldtype": "Link",
    "label": "Stock Entry",
    "no_copy": 1,
    "options": "Stock Entry",
-   "read_only": 1
-  },
-  {
-   "fieldname": "amended_from",
-   "fieldtype": "Link",
-   "label": "Amended From",
-   "no_copy": 1,
-   "options": "Plate Offcut",
-   "print_hide": 1,
    "read_only": 1
   },
   {
@@ -207,6 +305,24 @@
    "read_only": 0,
    "print_hide": 1,
    "collapsible": 0
+  },
+  {
+   "description": "The Material Issue created on submit: the remainder piece out of stock against this Project, so the consumed value lands on the order as expense.",
+   "fieldname": "material_issue",
+   "fieldtype": "Link",
+   "label": "Material Issue",
+   "no_copy": 1,
+   "options": "Stock Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Plate Offcut",
+   "print_hide": 1,
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,

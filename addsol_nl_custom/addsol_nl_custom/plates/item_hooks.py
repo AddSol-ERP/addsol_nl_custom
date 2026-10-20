@@ -9,11 +9,25 @@ from addsol_nl_custom.addsol_nl_custom.plates.item_defaults import apply_plate_i
 from addsol_nl_custom.addsol_nl_custom.plates.utils import build_plate_description, build_plate_item_name
 from addsol_nl_custom.addsol_nl_custom.plates.weight import compute_theoretical_weight, get_item_thickness_mm
 
+
 def item_autoname(doc, method):
 	"""Name a weighed Item from its grade, thickness, length and width.
 
 	For items without dimensions, fall back to whatever the user typed.
+
+	The one exception is a piece the cutting process made: an offcut or a
+	remainder already carries the name it was created under, and the size
+	maths cannot rebuild it - a circle has no length and width, and a
+	remainder has no size at all. Renaming either would orphan the stock,
+	batch and serial that point at the old name.
 	"""
+	if is_cutting_generated(doc):
+		# cutting.py named it and set item_name alongside; the link has to
+		# agree with the name, exactly as the plate branch below keeps them.
+		doc.name = doc.item_name or doc.name
+		doc.item_code = doc.name
+		return
+
 	if doc.custom_thickness_dropdown and doc.item_group:
 		doc.name = build_plate_item_name(
 			doc.item_group,
@@ -32,6 +46,17 @@ def item_autoname(doc, method):
 	doc.item_code = doc.name
 
 
+def is_cutting_generated(doc) -> bool:
+	"""Whether this Item is a piece of a cut plate rather than a plate size.
+
+	`custom_is_offcut` covers both offcuts - rectangular and circular - and
+	`custom_is_remainder` covers the piece a plate was cut down to. Neither is
+	named by the plate size rules: the cutting code owns the name, and on a
+	remainder there is not even a size to name it from.
+	"""
+	return bool(doc.custom_is_offcut or doc.custom_is_remainder)
+
+
 def item_validate(doc, method):
 	"""Keep an Item's name, description, weight and stock options in step."""
 	if not (doc.custom_thickness_dropdown and doc.item_group):
@@ -40,6 +65,16 @@ def item_validate(doc, method):
 	thickness_mm = get_item_thickness_mm(doc)
 	length_mm = doc.custom_length_mm
 	width_mm = doc.custom_width_mm
+
+	if is_cutting_generated(doc):
+		# Named by the cutting process, sized by it too. The size maths below
+		# would rename the Item (a remainder has no size to name it from) or
+		# refuse to weigh it (a circle has no length and width), so only the
+		# stock options still apply: these pieces are weighed, serialised and
+		# batched like any other plate item.
+		if is_weighed_group(doc.item_group):
+			apply_plate_item_defaults(doc)
+		return
 
 	expected_name = build_plate_item_name(doc.item_group, thickness_mm, length_mm, width_mm)
 

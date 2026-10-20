@@ -534,13 +534,53 @@ class TestFieldsWeUseAreDeclared(unittest.TestCase):
 			+ "; ".join(offenders),
 		)
 
-	def test_the_offcut_links_back_to_its_stock_entry(self):
-		"""plate_offcut.py writes Plate Offcut.stock_entry.
+	def test_the_offcut_links_back_to_its_stock_entries(self):
+		"""plate_offcut.py writes Plate Offcut.stock_entry and .material_issue.
 
-		This one is DocType-owned rather than a Custom Field, so the sweep
-		above cannot see it. It went missing once for the old cutting record
-		and would have died on the first real offcut at db_set.
+		These are DocType-owned rather than Custom Fields, so the sweep above
+		cannot see them. They went missing once for the old cutting record and
+		would have died on the first real offcut at db_set.
 		"""
 		offcut = load(os.path.join(MODULE_DIR, "doctype", "plate_offcut", "plate_offcut.json"))
 		fields = {f.get("fieldname") for f in offcut["fields"]}
 		self.assertIn("stock_entry", fields)
+		self.assertIn("material_issue", fields)
+
+	def test_every_field_the_offcut_controller_writes_is_declared(self):
+		"""The DocType-owned names plate_offcut.py assigns, all on the DocType.
+
+		Custom Fields are swept by test_every_custom_field_literal_is_declared;
+		these live in the DocType JSON, so only this list sees them. A name
+		that is not here fails at db_set on the first real document.
+		"""
+		offcut = load(os.path.join(MODULE_DIR, "doctype", "plate_offcut", "plate_offcut.json"))
+		fields = {f.get("fieldname") for f in offcut["fields"]}
+
+		for fieldname in (
+			"project",
+			"consumed_weight_kg",
+			"consumed_value",
+			"remainder_item",
+			"remainder_batch_no",
+			"remainder_serial_no",
+			"remainder_weight_kg",
+			"remainder_value",
+			"scrap_weight_kg",
+			"scrap_value",
+			"source_plate_text",
+		):
+			with self.subTest(field=fieldname):
+				self.assertIn(fieldname, fields)
+
+	def test_the_offcut_item_carries_shape_and_diameter(self):
+		"""plate_offcut.py and cutting.py read shape and diameter off the child.
+
+		Same class of trap as above: the child's fields are DocType-owned, so
+		a rename would only show up when a circle is cut.
+		"""
+		child = load(os.path.join(MODULE_DIR, "doctype", "plate_offcut_item", "plate_offcut_item.json"))
+		fields = {f.get("fieldname") for f in child["fields"]}
+
+		for fieldname in ("shape", "diameter_mm", "length_mm", "width_mm"):
+			with self.subTest(field=fieldname):
+				self.assertIn(fieldname, fields)

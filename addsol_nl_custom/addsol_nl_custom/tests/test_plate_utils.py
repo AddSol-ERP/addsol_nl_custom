@@ -5,6 +5,7 @@ import unittest
 
 import frappe
 
+from addsol_nl_custom.addsol_nl_custom.plates.cutting import plate_text_for
 from addsol_nl_custom.addsol_nl_custom.plates.utils import (
 	build_plate_description,
 	build_plate_item_name,
@@ -79,6 +80,34 @@ class TestPlateUtils(unittest.TestCase):
 		self.assertEqual(round_half_up(78.5, 3), 78.5)
 		self.assertEqual(round_half_up(2.5, 0), 3.0)
 		self.assertEqual(round_half_up(-2.5, 0), -3.0)
+
+	def tearDown(self):
+		frappe.db.rollback()
+
+
+class TestPlateTextFor(unittest.TestCase):
+	"""The plate spelled out under the serial, on the form and in the backfill.
+
+	The same words have to come out of the live reader and out of the patch
+	that names cuttings filed before the field existed, or a reopening of an
+	old document would disagree with a new one. So the formatting lives in
+	one helper both call, and these cases pin it.
+	"""
+
+	def test_a_batch_is_named_after_the_item(self):
+		self.assertEqual(
+			plate_text_for("MS Sheet 350-20-D240", "MS Sheet 350-20-D240", "OFC000008"),
+			"MS Sheet 350-20-D240 · Batch OFC000008",
+		)
+
+	def test_a_plate_with_no_batch_still_names_its_item(self):
+		self.assertEqual(plate_text_for("MS Plate 250", "MS Plate 250", None), "MS Plate 250")
+
+	def test_an_item_with_no_name_falls_back_to_its_code(self):
+		# Item.item_name is optional; a blank line would say less than the
+		# code it stands for.
+		self.assertEqual(plate_text_for(None, "SOME-CODE", "B-1"), "SOME-CODE · Batch B-1")
+		self.assertEqual(plate_text_for("", "SOME-CODE", None), "SOME-CODE")
 
 	def tearDown(self):
 		frappe.db.rollback()
