@@ -169,6 +169,14 @@ class TestCustomFieldFixture(unittest.TestCase):
 			("Item Group", "custom_multiplication_factor"),
 			("Item Group", "custom_batch_number_series"),
 			("Item Group", "custom_serial_no_series"),
+			# The attached-documents panel is a generic transaction-form feature,
+			# not plate logic: document_attachments.js mounts it on Purchase
+			# Receipt, Quality Inspection and Stock Entry alike, and only the
+			# first is a plate DocType. The plate generator has no business
+			# owning a field that is mostly about DocTypes it does not cover, so
+			# it stays hand-written - which is safe because main() keeps any
+			# record FIELD_SPECS does not claim.
+			("Purchase Receipt", "custom_document_attachments"),
 		}
 
 		orphans = [

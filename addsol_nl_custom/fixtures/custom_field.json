@@ -2880,6 +2880,20 @@
   "width": null
  },
  {
+  "collapsible": 0,
+  "doctype": "Custom Field",
+  "dt": "Purchase Receipt",
+  "fieldname": "custom_document_attachments",
+  "fieldtype": "HTML",
+  "hidden": 0,
+  "insert_after": "custom_total_est_weight_kg",
+  "label": "Attached Documents",
+  "name": "Purchase Receipt-custom_document_attachments",
+  "options": "",
+  "print_hide": 1,
+  "read_only": 0
+ },
+ {
   "allow_in_quick_entry": 0,
   "allow_on_submit": 0,
   "bold": 0,
@@ -3636,6 +3650,20 @@
   "width": null
  },
  {
+  "collapsible": 0,
+  "doctype": "Custom Field",
+  "dt": "Quality Inspection",
+  "fieldname": "custom_document_attachments",
+  "fieldtype": "HTML",
+  "hidden": 0,
+  "insert_after": "inspection_type",
+  "label": "Attached Documents",
+  "name": "Quality Inspection-custom_document_attachments",
+  "options": "",
+  "print_hide": 1,
+  "read_only": 0
+ },
+ {
   "allow_in_quick_entry": 0,
   "allow_on_submit": 0,
   "bold": 0,
@@ -3912,45 +3940,17 @@
   "width": null
  },
  {
+  "collapsible": 0,
   "doctype": "Custom Field",
-  "name": "custom_document_attachments",
-  "dt": "Purchase Receipt",
-  "fieldname": "custom_document_attachments",
-  "label": "Attached Documents",
-  "fieldtype": "HTML",
-  "insert_after": "custom_total_est_weight_kg",
-  "options": "",
-  "hidden": 0,
-  "read_only": 0,
-  "print_hide": 1,
-  "collapsible": 0
- },
- {
-  "doctype": "Custom Field",
-  "name": "custom_document_attachments",
-  "dt": "Quality Inspection",
-  "fieldname": "custom_document_attachments",
-  "label": "Attached Documents",
-  "fieldtype": "HTML",
-  "insert_after": "inspection_type",
-  "options": "",
-  "hidden": 0,
-  "read_only": 0,
-  "print_hide": 1,
-  "collapsible": 0
- },
- {
-  "doctype": "Custom Field",
-  "name": "custom_document_attachments",
   "dt": "Stock Entry",
   "fieldname": "custom_document_attachments",
-  "label": "Attached Documents",
   "fieldtype": "HTML",
-  "insert_after": "remarks",
-  "options": "",
   "hidden": 0,
-  "read_only": 0,
+  "insert_after": "remarks",
+  "label": "Attached Documents",
+  "name": "Stock Entry-custom_document_attachments",
+  "options": "",
   "print_hide": 1,
-  "collapsible": 0
+  "read_only": 0
  }
 ]
