@@ -447,9 +447,22 @@ Traps that carried over into the new flow:
   fail the same way, at runtime, on the first real document, and only the
   custom_% half is visible to a fixture-wide check.
   `tests/test_schema.py::TestFieldsWeUseAreDeclared` now AST-scans every
-  string literal in the app for `custom_*` names and asserts each is declared
+  string literal in the app for `custom_%` names and asserts each is declared
   in the fixture or a shipped DocType JSON, plus pins `stock_entry` on
   Plate Offcut; `tests/test_plate_offcut.py` exercises it live.
+- **A Custom Field record's NAME matters as much as its fieldname.** Frappe
+  names one `<DocType>-<fieldname>`, and `sync_fixtures` matches on that
+  name. The three `custom_document_attachments` records shipped with one
+  identical name, so only the last of them could ever be on a site, and
+  every site that ran that fixture kept the wrongly named one as an
+  ORPHAN - a record `sync_fixtures` can neither update (the name does not
+  match) nor re-create (the fieldname is already on the DocType). The
+  symptom on the next migrate was:
+  "A field with the name custom_document_attachments already exists in
+  Stock Entry". `patches/v1_0/remove_orphaned_custom_field_records.py`
+  removes it before the fixture import, and the fixture puts the three
+  fields back properly. `tests/test_orphaned_custom_fields.py` pins both
+  halves: the orphan goes, a properly named record stays.
 
 ## Purchase Order item layout (2026-10-18)
 

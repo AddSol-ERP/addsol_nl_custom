@@ -19,3 +19,4 @@ addsol_nl_custom.patches.v1_0.backfill_offcut_shape
 addsol_nl_custom.patches.v1_0.backfill_offcut_plate_text
 addsol_nl_custom.patches.v1_0.setup_finished_goods_group
 addsol_nl_custom.patches.v1_0.setup_supplier_quotation_item_layout
+addsol_nl_custom.patches.v1_0.remove_orphaned_custom_field_records
