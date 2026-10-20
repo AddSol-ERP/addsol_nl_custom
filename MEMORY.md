@@ -9,6 +9,11 @@ wide plate controls; item and Item Group metadata describe plate dimensions and
 defaults. Keep ordinary ERPNext purchasing unaffected when plate purchasing is
 disabled.
 
+Finished goods are the other half of the app: an Item in the Item Group named
+`Finished Goods` is named from its Project (`<Project>-00001`) and may only be
+sold against that Project. That rule lives under
+`addsol_nl_custom/finished_goods/`, not under `plates/`.
+
 The React Purchase Receipt UI is in the separate `erpnext-ui` repository. It
 uses the whitelisted methods in `plates/api.py` to read whether the feature is
 enabled, check whether an item is weight managed, and determine whether the
@@ -423,7 +428,7 @@ Traps that carried over into the new flow:
 - Asserts on `price_list_rate` beside `rate` in the PO pricing test; the
   per-plate weight is a receipt figure (`custom_weight_per_plate_kg` is not
   a Purchase Order Item field), on an order the piece weight is
-  `custom_unit_weight_kg` set by `set_po_weights`.
+  `custom_unit_weight_kg` set by `set_line_weights`.
 - `RateTestBase.setUp` writes `Plate Settings.enable_weight_based_purchasing
   = 0` itself: two tests save an order with no rate per kg, which the
   enabled hooks refuse by design, and the suite must not depend on the
@@ -455,3 +460,147 @@ builds the Property Setter's full `field_order` from live metadata and moves
 the blocks without assuming a fixed ERPNext field list. Plate Custom Fields
 remain sourced from `tools/generate_plate_custom_fields.py`; Rate per Kg is
 editable in the expanded row, not shown as an always-visible grid column.
+
+The same layout is applied to the Supplier Quotation Item, by
+`patches/v1_0/setup_supplier_quotation_item_layout.py`, which calls the
+shared `apply_layout` in the module above. Two modules, not one: a patch is
+run once and recorded in the patch log, so a change to an existing patch
+would never reach a site that had already run it. A new module is the only
+way to be a new migration step.
+
+## Finished-goods item codes (2026-10-21)
+
+A finished good is an Item in the Item Group named `Finished Goods`, or in any
+Item Group nested under it. Its code is generated, never typed:
+
+	<Item.custom_project>-<auto number>		W-0268-00001
+
+The code lives in `addsol_nl_custom/addsol_nl_custom/finished_goods/`, which
+is a package of its own - the plate rules are about a plate's size, these are
+about a product the customer makes.
+
+- The Project comes from `Item.custom_project`, a Link to Project. The field
+  carries the customer's own name for it. `addsol_devoltrans_custom` ships a
+  field of the same name on the Item master for the same purpose, but the two
+  apps are not installed on the same site, so this is a naming choice and not
+  a shared field.
+- The number is counted per Project, in a `tabSeries` row keyed
+  `<project>-`: `make_autoname("{project}.-.#####", doc={"project": ...})`.
+  One Sales Order with three finished goods draws 00001, 00002, 00003; a
+  second order on the same Project continues at 00004; another Project starts
+  again at 00001. A number is used even if the Item it was minted for is
+  later discarded - the same behaviour the remainder naming already has.
+- The code is given once, when the Item is created, and never moves.
+  Renaming an Item orphans the stock, the batches, the bills of materials
+  and every document that quotes it, so changing the Project on an existing
+  Item is reported, not acted on.
+- A typed code is replaced by the generated one, and the typed text is kept
+  as the `item_name`. Refusing it instead would break ERPNext's quick entry,
+  where `item_code` IS the mandatory name field.
+- The Sales Order may only book a finished good against that same Project
+  (the row's project, else the order's). A finished good with no Project was
+  made before the rule and is left alone.
+- The group is created by `setup_finished_goods_group` if the site has none.
+  A site without one has the rule switched off rather than broken.
+
+Traps that cost a look:
+
+- **`autoname` is not the last word on the name.** Frappe runs `validate`
+  inside `run_before_save_methods` and `db_insert` after it, so a name set
+  during `validate` is the name the row is stored under - and a rename done
+  by another app during `autoname` is overridden by one done during
+  `validate`. The code is therefore minted ONCE (in `autoname`, stashed on
+  `doc.flags`, never written to the database) and re-asserted in `validate`.
+  Minting twice would burn two numbers.
+- **Any other app that renames Items would fight this rule.**
+  `addsol_devoltrans_custom` renames Items to include the Project ID, but it
+  is not installed on this site. The rule here is still written to survive one:
+  the code is minted ONCE (in `autoname`, stashed on `doc.flags`, never
+  written to the database) and re-asserted in `validate`, and
+  `item_after_insert` compares the stored name with the minted one and says
+  so when they differ. The Item is stored by then, so nothing is changed - but
+  a finished good filed under a code this app did not mint is one the project
+  reports will not find.
+- **The plate rules and the finished-goods rules are told apart by the Item
+  Group.** `plates.item_hooks.is_finished_good` makes the plate rule stand
+  down, and the plate rule's "Item Name is required for items without
+  thickness" throw would otherwise refuse every finished good whose name
+  was left empty. The Item hooks are registered as a LIST in `hooks.py`, so
+  both rules run.
+- **A Project name has to be usable inside a code**: letters, digits, a dash
+  and an underscore. A Project typed by hand as "Job #12" is refused with the
+  reason, rather than silently stripped into a different code.
+- **`groups.finished_good_groups()` is deliberately NOT cached.** The set is
+  read from the whole Item Group table on every call. `frappe.local` survives
+  from one test to the next, and a cached set would go stale inside a
+  request that creates the group and then uses it - and across the test
+  suite, where the group is created in `setUp`.
+
+## Supplier Quotations price plates by weight (2026-10-21)
+
+A plate line on a Supplier Quotation is priced by weight, exactly as a
+Purchase Order line is, and the Purchase Order built from the quotation
+inherits the price. The problem it answers: an order raised from a
+quotation arrived with no rate per kg, so the buyer typed the price again
+and the two documents could disagree about it.
+
+The rate per kg on a quotation is DERIVED, not typed - the supplier quotes
+a price per plate, and the plate's weight is known:
+
+	rate per kg = quoted rate per plate / kg per plate
+	amount      = estimated weight x rate per kg
+	rate        = amount / quantity
+
+- `plates/purchase.py::sq_before_validate` is the hook, on
+  `doc_events["Supplier Quotation"]["before_validate"]`. It marks the plate
+  rows, applies the Purchase Order's UoM rule (a plate line is in Nos with a
+  conversion factor of 1), works out the two weights, derives the rate per
+  kg and prices the line with the same `apply_amount` the order uses.
+- **A price is OPTIONAL on a quotation.** A quote is often raised before the
+  supplier has answered, so a line with no quoted rate is left alone rather
+  than refused. The Purchase Order is where the price is demanded. This is
+  the one place the quotation is more permissive than the order.
+- **The rate per kg is a fixed point of the round trip**, and has to be: the
+  quoted rate is worked out from the rate per kg, and the rate per kg is
+  worked out from the quoted rate. Save the quotation twice and nothing
+  moves. `tests/test_supplier_quotation.py` pins it.
+- **What the supplier quoted and what the weight pricing gives can differ by
+  a paisa or two** - the rate per kg is stored at four decimals and a plate
+  weighs a quarter of a tonne, so the bound is half a rupee per ten tonnes.
+  The quotation and the Purchase Order agree EXACTLY, because they price the
+  same weights with the same stored rate per kg. The Purchase Order Item's
+  money fields are at precision 6 for the same reason, and the Supplier
+  Quotation Item's are now too (`tools/generate_plate_property_setters.py`).
+- **A discount on a plate line is cleared and folded into the rate**, the
+  same as on the Purchase Order. The effective price is preserved; the
+  document ends up in the same shape as an order line.
+- **ERPNext's mapper copies the rate per kg across by name**
+  (`frappe/model/mapper.py:161` copies every field the source and the target
+  share), so no `field_map` entry is needed. The Purchase Order side needed
+  no change at all.
+
+Traps:
+
+- **The client must not rewrite the quoted rate.** On the Purchase Order the
+  buyer types the rate per kg and the app writes the per-piece rate beside
+  it - two different fields. On a quotation the quoted rate IS the per-piece
+  rate, so a preview that set it would fight the buyer mid-typing. The
+  client therefore fills only the two read-only figures
+  (`custom_rate_per_kg`, `custom_est_weight_kg`) and leaves the price to the
+  server on save.
+- **`public/js/purchase_weight_pricing.js` did not parse, so none of it ran.**
+  An `if` statement sat inside the object literal handed to
+  `frappe.ui.form.on`, with the braces doubled (`{{` / `}}`) as if the file
+  were still a Jinja template. The browser rejected the whole file, so the
+  plate marking before the first save, the rate suggestion, the live price
+  preview AND the attachments panel it mounts were all dead on the site.
+  A syntax error in a desk script is invisible until you run a parser over
+  it - `npx prettier --check` or `node --check` both say so in a second.
+- **`sum_header` was summing the wrong field.** It read each row under the
+  HEADER's name, and no row carries a `custom_total_...` name, so "Total
+  Estimated Weight" and "Total Accepted Weight" read zero on every Purchase
+  Order, Receipt and Invoice. The row figure is the header name without the
+  `total_` in it. The fields are display only - nothing reads them - so
+  fixing it changed nothing else.
+
+

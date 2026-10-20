@@ -1219,5 +1219,60 @@
   "property_type": "Check",
   "row_name": null,
   "value": "0"
+ },
+ {
+  "doc_type": "Supplier Quotation Item",
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "base_net_rate",
+  "modified": "2026-10-14 00:00:00.000000",
+  "name": "Supplier Quotation Item-base_net_rate-precision",
+  "property": "precision",
+  "property_type": "Int",
+  "value": "6"
+ },
+ {
+  "doc_type": "Supplier Quotation Item",
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "base_rate",
+  "modified": "2026-10-14 00:00:00.000000",
+  "name": "Supplier Quotation Item-base_rate-precision",
+  "property": "precision",
+  "property_type": "Int",
+  "value": "6"
+ },
+ {
+  "doc_type": "Supplier Quotation Item",
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "net_rate",
+  "modified": "2026-10-14 00:00:00.000000",
+  "name": "Supplier Quotation Item-net_rate-precision",
+  "property": "precision",
+  "property_type": "Int",
+  "value": "6"
+ },
+ {
+  "doc_type": "Supplier Quotation Item",
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "price_list_rate",
+  "modified": "2026-10-14 00:00:00.000000",
+  "name": "Supplier Quotation Item-price_list_rate-precision",
+  "property": "precision",
+  "property_type": "Int",
+  "value": "6"
+ },
+ {
+  "doc_type": "Supplier Quotation Item",
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "rate",
+  "modified": "2026-10-14 00:00:00.000000",
+  "name": "Supplier Quotation Item-rate-precision",
+  "property": "precision",
+  "property_type": "Int",
+  "value": "6"
  }
 ]

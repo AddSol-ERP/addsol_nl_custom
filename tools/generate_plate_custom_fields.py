@@ -41,6 +41,20 @@ FIELD_SPECS = [
 	  "description": "The Project this remainder was cut for. Named into the Item so two "
 	                 "projects never share a remainder Item."}),
 
+	# ------------------------------------------------- Finished goods (own make)
+	# The Project an Item is made for. A finished good - an Item in the
+	# "Finished Goods" Item Group - is named from it, as <Project>-00001, and
+	# it can only be sold against that Project.
+	#
+	# The field is called custom_project because that is the name the customer
+	# uses for it. addsol_devoltrans_custom ships a field of the same name on
+	# the Item master for the same purpose, but the two apps are not installed
+	# on the same site, so this is a naming choice and not a shared field.
+	("Item", "custom_project", "Link", "Project", "Project",
+	 {"allow_in_quick_entry": 1,
+	  "description": "The Project this Item is made for. A finished good is named from it, "
+	                 "as <Project>-00001, and it can only be sold against that Project."}),
+
 	# ------------------------------------------------- C1 Item Group additions
 	("Item Group", "custom_min_offcut_length_mm", "Float", "Minimum Offcut Length (mm)", None,
 	 {"depends_on": "eval:doc.custom_formula",
@@ -77,6 +91,31 @@ FIELD_SPECS = [
 	 {"read_only": 1, "precision": "3", "depends_on": "eval:doc.custom_is_plate",
 	  "description": "Quantity times the theoretical weight per plate."}),
 	("Purchase Order", "custom_total_est_weight_kg", "Float", "Total Estimated Weight (Kg)", None,
+	 {"read_only": 1, "precision": "3"}),
+
+	# ---------------------------------------- C4 Supplier Quotation / Item
+	# The same plate fields as the Purchase Order, with one difference: on a
+	# quotation the rate per kg is WORKED OUT from the quoted rate, because
+	# the supplier quotes a price per plate and the plate's weight is known.
+	# It is read-only here, and the Purchase Order built from the quotation
+	# inherits it, so nobody types the price twice.
+	("Supplier Quotation Item", "custom_is_plate", "Check", "Is Plate", None,
+	 {"read_only": 1, "hidden": 1, "print_hide": 1}),
+	("Supplier Quotation Item", "custom_plate_details_section", "Section Break", "Plate Details", None,
+	 {"depends_on": "eval:doc.custom_is_plate"}),
+	("Supplier Quotation Item", "custom_rate_per_kg", "Currency", "Rate per Kg", "currency",
+	 {"read_only": 1, "in_list_view": 0, "precision": "4", "depends_on": "eval:doc.custom_is_plate",
+	  "description": "Worked out from the quoted rate and the plate's weight. It is what the "
+	                 "Purchase Order inherits, so the price is not typed twice."}),
+	("Supplier Quotation Item", "custom_unit_weight_kg", "Float", "Theoretical Wt per Plate (Kg)", None,
+	 {"read_only": 1, "precision": "3", "depends_on": "eval:doc.custom_is_plate",
+	  "fetch_from": "item_code.weight_per_unit", "fetch_if_empty": 1}),
+	("Supplier Quotation Item", "custom_plate_weight_column_break", "Column Break", "", None,
+	 {"depends_on": "eval:doc.custom_is_plate"}),
+	("Supplier Quotation Item", "custom_est_weight_kg", "Float", "Estimated Weight (Kg)", None,
+	 {"read_only": 1, "precision": "3", "depends_on": "eval:doc.custom_is_plate",
+	  "description": "Quantity times the theoretical weight per plate."}),
+	("Supplier Quotation", "custom_total_est_weight_kg", "Float", "Total Estimated Weight (Kg)", None,
 	 {"read_only": 1, "precision": "3"}),
 
 	# --------------------------------------------- C4 Purchase Receipt / Item
@@ -160,6 +199,7 @@ INSERT_AFTER = {
 	("Item", "custom_diameter_mm"): "custom_width_mm",
 	("Item", "custom_is_remainder"): "custom_source_item",
 	("Item", "custom_remainder_project"): "custom_is_remainder",
+	("Item", "custom_project"): "item_group",
 	("Item Group", "custom_is_weighed_grade"): "custom_formula",
 	("Item Group", "custom_min_offcut_length_mm"): "custom_serial_no_series",
 	("Item Group", "custom_min_offcut_width_mm"): "custom_min_offcut_length_mm",
@@ -170,6 +210,13 @@ INSERT_AFTER = {
 	("Purchase Order Item", "custom_plate_weight_column_break"): "custom_unit_weight_kg",
 	("Purchase Order Item", "custom_est_weight_kg"): "custom_plate_weight_column_break",
 	("Purchase Order", "custom_total_est_weight_kg"): "total_net_weight",
+	("Supplier Quotation Item", "custom_is_plate"): "rate",
+	("Supplier Quotation Item", "custom_plate_details_section"): "amount",
+	("Supplier Quotation Item", "custom_rate_per_kg"): "custom_plate_details_section",
+	("Supplier Quotation Item", "custom_unit_weight_kg"): "custom_rate_per_kg",
+	("Supplier Quotation Item", "custom_plate_weight_column_break"): "custom_unit_weight_kg",
+	("Supplier Quotation Item", "custom_est_weight_kg"): "custom_plate_weight_column_break",
+	("Supplier Quotation", "custom_total_est_weight_kg"): "total_net_weight",
 	("Purchase Receipt Item", "custom_is_plate"): "rate",
 	("Purchase Receipt Item", "custom_rate_per_kg"): "rate",
 	("Purchase Receipt Item", "custom_unit_weight_kg"): "custom_rate_per_kg",

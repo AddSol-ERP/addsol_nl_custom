@@ -7,7 +7,7 @@ async function update_weight_pricing_flag(frm, cdt, cdn) {
 		? await frappe.call({
 				method: "addsol_nl_custom.addsol_nl_custom.plates.api.is_weight_managed_item",
 				args: { item_code },
-			})
+		  })
 		: null;
 	if (locals[cdt][cdn].item_code !== item_code) return;
 
@@ -16,10 +16,19 @@ async function update_weight_pricing_flag(frm, cdt, cdn) {
 		await frappe.model.set_value(cdt, cdn, "custom_is_plate", is_weight_managed ? 1 : 0);
 	}
 	if (is_weight_managed) {
-		await suggest_rate_per_kg(frm, cdt, cdn);
+		if (RATE_IS_ENTERED.includes(cdt)) {
+			await suggest_rate_per_kg(frm, cdt, cdn);
+		} else {
+			await preview_quotation_weights(frm, cdt, cdn);
+		}
 	}
 	frm.refresh_field("items");
 }
+
+// The documents where the buyer TYPES the rate per kg. A Supplier Quotation
+// is not one of them: there the rate per kg is worked out from the quoted
+// rate, so there is nothing to offer and nothing to type.
+const RATE_IS_ENTERED = ["Purchase Order Item", "Purchase Receipt Item"];
 
 // Fill an empty rate per kg with the last one agreed for this item. Never
 // overwrites a rate someone has typed - the buyer's figure is the one that
@@ -42,6 +51,37 @@ async function suggest_rate_per_kg(frm, cdt, cdn) {
 	}
 }
 
+// The two read-only figures on a Supplier Quotation, filled in as a preview
+// of what the server will store.
+//
+// The quoted rate is never touched. That is the field the buyer is typing
+// in, and rewriting it under the cursor would fight them; the server prices
+// the line on save, and it has the final word on the rounding.
+async function preview_quotation_weights(frm, cdt, cdn) {
+	const row = locals[cdt][cdn];
+	if (!row.custom_is_plate) return;
+
+	const unit_weight = frappe.utils.flt(row.custom_unit_weight_kg);
+	if (!unit_weight) return;
+
+	const quoted_rate = frappe.utils.flt(row.rate);
+	if (quoted_rate) {
+		await frappe.model.set_value(
+			cdt,
+			cdn,
+			"custom_rate_per_kg",
+			frappe.utils.flt(quoted_rate / unit_weight, 4)
+		);
+	}
+
+	await frappe.model.set_value(
+		cdt,
+		cdn,
+		"custom_est_weight_kg",
+		frappe.utils.flt(frappe.utils.flt(row.qty) * unit_weight, 3)
+	);
+}
+
 // Mirror of plates/purchase.py apply_amount so the buyer sees the effect of a
 // new rate per kg without waiting for a save. The server still recomputes on
 // validate and has the final word; this is only the preview. Rate precision
@@ -58,7 +98,8 @@ function apply_weight_pricing(frm, cdt, cdn) {
 	// before pricing, so do the same and only fall back to the stored
 	// estimate when the unit weight has not been fetched yet.
 	const billable_kg =
-		frappe.utils.flt(row.custom_unit_weight_kg) * qty || frappe.utils.flt(row.custom_est_weight_kg);
+		frappe.utils.flt(row.custom_unit_weight_kg) * qty ||
+		frappe.utils.flt(row.custom_est_weight_kg);
 	if (!rate_per_kg || !qty || !billable_kg) return;
 
 	const amount = frappe.utils.flt(billable_kg * rate_per_kg, 2);
@@ -85,14 +126,14 @@ for (const parent_doctype of ["Purchase Order", "Purchase Receipt"]) {
 	frappe.ui.form.on(parent_doctype, {
 		refresh(frm) {
 			refresh_weight_pricing_flags(frm);
-		// `doctype_js` is a dict, so this file owns Purchase Receipt and the attachments
-		// panel cannot claim it. It lives in document_attachments.js and is
-		// mounted from here. Guarded because script load order is not
-		// guaranteed; this runs at form refresh, long after every bundle loads.
-		if (window.addsol_document_attachments) {{
-			window.addsol_document_attachments.mount("Purchase Receipt");
-		}}
-
+			// `doctype_js` is a dict, so this file owns Purchase Receipt and the
+			// attachments panel cannot claim it. It lives in
+			// document_attachments.js and is mounted from here. Guarded because
+			// script load order is not guaranteed; this runs at form refresh,
+			// long after every bundle loads.
+			if (window.addsol_document_attachments) {
+				window.addsol_document_attachments.mount("Purchase Receipt");
+			}
 		},
 		// A different supplier can mean a different going rate, so lines still
 		// empty get offered one again.
@@ -106,7 +147,20 @@ for (const parent_doctype of ["Purchase Order", "Purchase Receipt"]) {
 	});
 }
 
-for (const child_doctype of ["Purchase Order Item", "Purchase Receipt Item"]) {
+// The Supplier Quotation is not a purchase order: the rate per kg is worked
+// out from the quoted rate, so there is no rate to offer when the supplier
+// changes. The rows are still marked, so the plate details show.
+frappe.ui.form.on("Supplier Quotation", {
+	refresh(frm) {
+		refresh_weight_pricing_flags(frm);
+	},
+});
+
+for (const child_doctype of [
+	"Purchase Order Item",
+	"Purchase Receipt Item",
+	"Supplier Quotation Item",
+]) {
 	frappe.ui.form.on(child_doctype, {
 		item_code(frm, cdt, cdn) {
 			update_weight_pricing_flag(frm, cdt, cdn);
@@ -126,5 +180,16 @@ frappe.ui.form.on("Purchase Order Item", {
 		if (frappe.utils.flt(locals[cdt][cdn].custom_rate_per_kg)) {
 			apply_weight_pricing(frm, cdt, cdn);
 		}
+	},
+});
+
+// The quotation's figures follow the quoted rate and the quantity, so they
+// are previewed as those two change.
+frappe.ui.form.on("Supplier Quotation Item", {
+	rate(frm, cdt, cdn) {
+		preview_quotation_weights(frm, cdt, cdn);
+	},
+	qty(frm, cdt, cdn) {
+		preview_quotation_weights(frm, cdt, cdn);
 	},
 });

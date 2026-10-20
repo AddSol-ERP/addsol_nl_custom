@@ -24,6 +24,12 @@ AMOUNT_TOLERANCE = 0.05
 WEIGHT_PRECISION = 3
 RATE_PRECISION = 6
 
+# The rate per kg is stored at four decimals, so the figure worked out from a
+# quoted rate is rounded to the same four. Anything more would be thrown away
+# when the value is stored, and the Purchase Order that inherits it would
+# price the line differently from the quotation it came from.
+RATE_PER_KG_PRECISION = 4
+
 ACCEPT_SUPPLIER = "Accept Supplier Weight"
 ACCEPT_ESTIMATED = "Accept Estimated Weight"
 ACCEPT_WEIGHBRIDGE = "Accept Weighbridge Weight"
@@ -86,11 +92,26 @@ def apply_amount(doc, row, billable_kg) -> None:
 		row.custom_weight_per_plate_kg = round_half_up(billable_kg / qty, WEIGHT_PRECISION)
 
 
-def sum_header(doc, fieldname, rows) -> None:
-	if doc.meta.get_field(fieldname):
-		doc.set(
-			fieldname, round_half_up(sum(frappe.utils.flt(r.get(fieldname)) for r in rows), WEIGHT_PRECISION)
-		)
+def sum_header(doc, fieldname, rows, row_fieldname) -> None:
+	"""The header total, from the row figures.
+
+	`fieldname` is the header field and `row_fieldname` the row figure it
+	totals: the header's `custom_total_est_weight_kg` is the sum of the rows'
+	`custom_est_weight_kg`.
+
+	Reading the row under the header's OWN name summed nothing, because no
+	row carries that name - so "Total Estimated Weight" and "Total Accepted
+	Weight" have been reading zero on every Purchase Order, Receipt and
+	Invoice since they were added. The fields are display only; nothing
+	reads them, so filling them in properly changes nothing else.
+	"""
+	if not doc.meta.get_field(fieldname):
+		return
+
+	doc.set(
+		fieldname,
+		round_half_up(sum(frappe.utils.flt(r.get(row_fieldname)) for r in rows), WEIGHT_PRECISION),
+	)
 
 
 def assert_amount_reconciles(doc, row) -> None:
@@ -128,14 +149,19 @@ def po_before_validate(doc, method=None) -> None:
 
 	for row in rows:
 		require_nos(doc, row)
-		set_po_weights(doc, row)
+		set_line_weights(doc, row)
 		set_po_rate(doc, row)
 
-	sum_header(doc, "custom_total_est_weight_kg", rows)
+	sum_header(doc, "custom_total_est_weight_kg", rows, "custom_est_weight_kg")
 
 
-def set_po_weights(doc, row) -> None:
-	"""Theoretical weight per plate, then the line's estimated weight."""
+def set_line_weights(doc, row) -> None:
+	"""Theoretical weight per plate, then the line's estimated weight.
+
+	The same two figures on a Purchase Order and on a Supplier Quotation, so
+	that a line priced on the quotation and the same line priced on the order
+	come to the same amount.
+	"""
 	row.custom_unit_weight_kg = frappe.utils.flt(row.get("item_weight_per_unit")) or frappe.utils.flt(
 		frappe.db.get_value("Item", row.get("item_code"), "weight_per_unit")
 	)
@@ -164,6 +190,65 @@ def set_po_rate(doc, row) -> None:
 	apply_amount(doc, row, frappe.utils.flt(row.get("custom_est_weight_kg")))
 
 
+# --------------------------------------------------------- Supplier Quotation
+
+
+def sq_before_validate(doc, method=None) -> None:
+	"""Price a plate line on a Supplier Quotation by weight.
+
+	Same rule as the Purchase Order, and one difference in where the price
+	comes from. On an order the buyer types the rate per kg. On a quotation it
+	is WORKED OUT from the quoted rate, because the supplier quotes a price per
+	plate and the plate's weight is known. The Purchase Order built from the
+	quotation inherits the figure, so nobody types the price twice.
+
+	The quotation is not the place to insist on a price: a quote is often
+	raised before the supplier has answered, so a line with no quoted rate is
+	left alone. The Purchase Order is where the price is demanded.
+	"""
+	mark_plate_rows(doc)
+
+	if not is_enabled():
+		return
+
+	rows = plate_rows(doc)
+	if not rows:
+		return
+
+	for row in rows:
+		require_nos(doc, row)
+		set_line_weights(doc, row)
+		set_sq_rate(doc, row)
+
+	sum_header(doc, "custom_total_est_weight_kg", rows, "custom_est_weight_kg")
+
+
+def set_sq_rate(doc, row) -> None:
+	"""The rate per kg, worked out from the quoted rate, and the line priced by weight.
+
+	The quoted rate is per plate and the plate's weight is known, so the two
+	give the price per kg. The line is then priced the way a Purchase Order
+	line is priced: the amount is the estimated weight times the rate per kg,
+	and the per-piece rate follows from that.
+
+	The two documents therefore agree exactly, because they price the same
+	weights with the same stored rate per kg. What the supplier quoted and
+	what the weight pricing gives can differ by a paisa or two - the rate per
+	kg is stored at four decimals and a plate weighs a quarter of a tonne -
+	and the quotation carries the weight figure, not the supplier's arithmetic.
+	"""
+	unit_weight = frappe.utils.flt(row.get("custom_unit_weight_kg"))
+	quoted_rate = frappe.utils.flt(row.get("rate"))
+
+	if not unit_weight or not quoted_rate:
+		# No price yet, or a plate with no weight to work the price from.
+		return
+
+	row.custom_rate_per_kg = round_half_up(quoted_rate / unit_weight, RATE_PER_KG_PRECISION)
+
+	apply_amount(doc, row, frappe.utils.flt(row.get("custom_est_weight_kg")))
+
+
 # ---------------------------------------------------------- Purchase Receipt
 
 
@@ -183,8 +268,8 @@ def pr_before_validate(doc, method=None) -> None:
 		set_receipt_weights(doc, row)
 		resolve_billable_weight(doc, row)
 
-	sum_header(doc, "custom_total_est_weight_kg", rows)
-	sum_header(doc, "custom_total_billable_weight_kg", rows)
+	sum_header(doc, "custom_total_est_weight_kg", rows, "custom_est_weight_kg")
+	sum_header(doc, "custom_total_billable_weight_kg", rows, "custom_billable_weight_kg")
 
 
 def copy_rate_from_order(doc, row) -> None:
@@ -309,8 +394,8 @@ def pr_before_submit(doc, method=None) -> None:
 				title=_("Receipt line is not ready"),
 			)
 
-	sum_header(doc, "custom_total_est_weight_kg", rows)
-	sum_header(doc, "custom_total_billable_weight_kg", rows)
+	sum_header(doc, "custom_total_est_weight_kg", rows, "custom_est_weight_kg")
+	sum_header(doc, "custom_total_billable_weight_kg", rows, "custom_billable_weight_kg")
 
 
 def blocked_reason(doc, row, approver_role) -> str:
@@ -350,7 +435,7 @@ def pi_before_validate(doc, method=None) -> None:
 		else:
 			apply_receipt_rules(doc, row)
 
-	sum_header(doc, "custom_total_billable_weight_kg", rows)
+	sum_header(doc, "custom_total_billable_weight_kg", rows, "custom_billable_weight_kg")
 
 
 def check_invoice_against_receipt(doc, row) -> None:

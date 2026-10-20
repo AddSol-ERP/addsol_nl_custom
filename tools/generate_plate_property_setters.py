@@ -5,9 +5,12 @@ Run from the app directory:
 
     python3 ../../../tools/generate_plate_property_setters.py
 
-This produces precision 6 on the money fields of the three purchase item
-tables, so that amount = quantity x rate lands within a few paise of accepted
-weight x rate per kg (Part C7).
+This produces precision 6 on the money fields of the buying item tables, so
+that amount = quantity x rate lands within a few paise of accepted weight x
+rate per kg (Part C7). The Supplier Quotation Item is in the list for the
+same reason: a quotation prices a plate line by weight, and the Purchase
+Order built from it prices the same line the same way, so the two documents
+have to carry the same precision or they drift apart by a paisa or two.
 
 Field order is deliberately NOT produced here. A field_order Property Setter
 replaces the DocType's entire field order, so one built from a guess would hide
@@ -24,7 +27,12 @@ APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIXTURE = os.path.join(APP_DIR, "addsol_nl_custom", "fixtures", "property_setter.json")
 
 # Money fields that need enough decimal places for amount = qty x rate.
-PRECISION_6_DOCTYPES = ["Purchase Order Item", "Purchase Receipt Item", "Purchase Invoice Item"]
+PRECISION_6_DOCTYPES = [
+	"Purchase Order Item",
+	"Purchase Receipt Item",
+	"Purchase Invoice Item",
+	"Supplier Quotation Item",
+]
 PRECISION_6_FIELDS = ["rate", "base_rate", "net_rate", "base_net_rate", "price_list_rate"]
 
 MODIFIED = "2026-10-14 00:00:00.000000"

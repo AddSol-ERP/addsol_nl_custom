@@ -8,6 +8,9 @@ non-trivial change; it records the app's data model and known integration traps.
 
 - `addsol_nl_custom/plates/`: plate settings, weight calculations, purchasing,
   receipt validation, item defaults, cutting, offcut handling, and API methods.
+- `addsol_nl_custom/finished_goods/`: the finished-goods item code rule. An
+  Item in the Item Group named `Finished Goods` is named from its Project
+  (`<Project>-00001`) and may only be sold against that Project.
 - `addsol_nl_custom/doctype/`: app DocTypes, including the single Plate Settings
   record and plate cutting records.
 - `addsol_nl_custom/report/`: standard Python Script Reports. Keep the report
@@ -54,3 +57,6 @@ this workspace.
   the weight formula itself.
 - Keep customer-specific React receipt presentation in `erpnext-ui`; this app
   owns the server-side plate settings, item checks, and validation contracts.
+- The Item hooks are registered as a list, because more than one rule can own
+  the Item name. The plate rule and the finished-goods rule are told apart by
+  the Item Group, and each one stands down for the other's groups.

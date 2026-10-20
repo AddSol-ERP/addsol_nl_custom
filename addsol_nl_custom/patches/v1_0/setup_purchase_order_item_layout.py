@@ -17,42 +17,51 @@ def execute():
 	customization to one ERPNext release's full list of Purchase Order Item
 	fields.
 	"""
-	if not frappe.db.exists("DocType", DOCTYPE):
+	apply_layout(DOCTYPE, DESCRIPTION_SECTION, QUANTITY_SECTION, "Purchase Order")
+
+
+def apply_layout(doctype, description_section, quantity_section, label):
+	"""Put the quantity, rate and plate details above the description.
+
+	Shared with the Supplier Quotation, which wants the same block in the
+	same place: a plate line on a quotation is priced by weight, and the
+	figures that price it belong next to the quantity and the rate rather
+	than below the description.
+	"""
+	if not frappe.db.exists("DocType", doctype):
 		return
 
-	fields = frappe.get_meta(DOCTYPE).fields
+	fields = frappe.get_meta(doctype).fields
 	field_order = [field.fieldname for field in fields if field.fieldname]
 	field_type_by_name = {field.fieldname: field.fieldtype for field in fields if field.fieldname}
 
-	if DESCRIPTION_SECTION not in field_order or QUANTITY_SECTION not in field_order:
+	if description_section not in field_order or quantity_section not in field_order:
 		return
 
 	# Move Quantity and Rate, then Plate Details, before Description. Frappe
 	# treats each Section Break as the start of a new block, so Plate Details
 	# must be repositioned separately from the preceding Quantity and Rate block.
-	field_order = move_section_before(
-		field_order, QUANTITY_SECTION, DESCRIPTION_SECTION, field_type_by_name
-	)
+	field_order = move_section_before(field_order, quantity_section, description_section, field_type_by_name)
 	if "custom_plate_details_section" in field_order:
 		field_order = move_section_before(
 			field_order,
 			"custom_plate_details_section",
-			DESCRIPTION_SECTION,
+			description_section,
 			field_type_by_name,
 		)
 
 	value = json.dumps(field_order)
-	setter_name = f"{DOCTYPE}-main-field_order"
+	setter_name = f"{doctype}-main-field_order"
 	if value == json.dumps([field.fieldname for field in fields if field.fieldname]):
 		return
 
 	if frappe.db.exists("Property Setter", setter_name):
 		frappe.db.set_value("Property Setter", setter_name, "value", value, update_modified=False)
-		frappe.clear_cache(doctype=DOCTYPE)
+		frappe.clear_cache(doctype=doctype)
 	else:
 		frappe.make_property_setter(
 			{
-				"doctype": DOCTYPE,
+				"doctype": doctype,
 				"doctype_or_field": "DocType",
 				"fieldname": None,
 				"property": "field_order",
@@ -61,7 +70,7 @@ def execute():
 			},
 			validate_fields_for_doctype=False,
 		)
-	print("Moved Purchase Order quantity, rate, and plate fields above Description")
+	print(f"Moved {label} quantity, rate, and plate fields above Description")
 
 
 def move_section_before(field_order, section_name, target_section, field_type_by_name):

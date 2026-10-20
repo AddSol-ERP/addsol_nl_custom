@@ -59,6 +59,7 @@ doctype_js = {
 	"Plate Offcut": "public/js/plate_offcut.js",
 	"Purchase Order": "public/js/purchase_weight_pricing.js",
 	"Purchase Receipt": "public/js/purchase_weight_pricing.js",
+	"Sales Order": "public/js/sales_order.js",
 	"Serial No": "public/js/serial_no.js",
 	"Stock Entry": "public/js/document_attachments.js",
 	"Quality Inspection": "public/js/document_attachments.js",
@@ -110,9 +111,14 @@ doctype_js = {
 # sync, so fresh installs and migrations both receive it.
 after_sync = [
 	"addsol_nl_custom.patches.v1_0.setup_plate_defaults.execute",
+	"addsol_nl_custom.patches.v1_0.setup_finished_goods_group.execute",
 	"addsol_nl_custom.patches.v1_0.setup_purchase_order_item_layout.execute",
+	"addsol_nl_custom.patches.v1_0.setup_supplier_quotation_item_layout.execute",
 ]
-after_migrate = "addsol_nl_custom.patches.v1_0.setup_purchase_order_item_layout.execute"
+after_migrate = [
+	"addsol_nl_custom.patches.v1_0.setup_purchase_order_item_layout.execute",
+	"addsol_nl_custom.patches.v1_0.setup_supplier_quotation_item_layout.execute",
+]
 
 # Uninstallation
 # ------------
@@ -168,11 +174,38 @@ after_migrate = "addsol_nl_custom.patches.v1_0.setup_purchase_order_item_layout.
 
 doc_events = {
 	"Item": {
-		"autoname": "addsol_nl_custom.addsol_nl_custom.plates.item_hooks.item_autoname",
-		"validate": "addsol_nl_custom.addsol_nl_custom.plates.item_hooks.item_validate",
+		# Two rules, and they are told apart by the Item Group. A plate is
+		# named from its grade and its size; a finished good is named from the
+		# Project it is made for. The plate rule stands down for a finished
+		# good (see plates.item_hooks.is_finished_good), and the finished good
+		# rule runs last so it has the final say on the name.
+		"autoname": [
+			"addsol_nl_custom.addsol_nl_custom.plates.item_hooks.item_autoname",
+			"addsol_nl_custom.addsol_nl_custom.finished_goods.item_hooks.item_autoname",
+		],
+		"validate": [
+			"addsol_nl_custom.addsol_nl_custom.plates.item_hooks.item_validate",
+			"addsol_nl_custom.addsol_nl_custom.finished_goods.item_hooks.item_validate",
+		],
+		# Reports a finished good another app renamed. Nothing is changed
+		# there - the Item is stored by then - but a code this app did not mint
+		# is one the project reports will not find.
+		"after_insert": "addsol_nl_custom.addsol_nl_custom.finished_goods.item_hooks.item_after_insert",
 	},
 	"Item Group": {
 		"validate": "addsol_nl_custom.addsol_nl_custom.plates.item_group_hooks.item_group_validate",
+	},
+	# A finished good is made for one Project and can only be sold against
+	# that Project. A finished good made before the rule carries no Project
+	# and keeps working.
+	"Sales Order": {
+		"validate": "addsol_nl_custom.addsol_nl_custom.finished_goods.sales_order.sales_order_validate",
+	},
+	# A plate line on a Supplier Quotation is priced by weight, exactly as on
+	# the Purchase Order, and the rate per kg is worked out from the quoted
+	# rate. The Purchase Order built from the quotation inherits it.
+	"Supplier Quotation": {
+		"before_validate": "addsol_nl_custom.addsol_nl_custom.plates.purchase.sq_before_validate",
 	},
 	# Part D. All three of these stand down while Plate Settings'
 	# enable_weight_based_purchasing is off, so they cannot move money on a
@@ -316,6 +349,7 @@ SPEC_DOCTYPES = [
 	"Purchase Receipt Item",
 	"Purchase Invoice",
 	"Purchase Invoice Item",
+	"Supplier Quotation Item",
 	"Stock Entry",
 	"Stock Entry Detail",
 	"Job Card",

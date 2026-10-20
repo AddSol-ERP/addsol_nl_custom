@@ -31,7 +31,7 @@ NEW_SUPPLIER = "RATE-TEST-BRAND-NEW"
 
 
 @contextmanager
-def _without_material_request_rule():
+def without_material_request_rule():
 	"""Let a test Purchase Order through the sibling app's MR-origin rule.
 
 	addsol_devoltrans_custom only accepts a Purchase Order row that originates
@@ -106,7 +106,7 @@ def make_order(item_code, supplier, rate_per_kg, submit=True, on_date=None):
 			],
 		}
 	)
-	with _without_material_request_rule():
+	with without_material_request_rule():
 		order.insert(ignore_permissions=True)
 
 		if submit:

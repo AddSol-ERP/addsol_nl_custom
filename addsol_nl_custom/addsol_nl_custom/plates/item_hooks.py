@@ -4,6 +4,7 @@
 import frappe
 from frappe import _
 
+from addsol_nl_custom.addsol_nl_custom.finished_goods.groups import is_finished_good_group
 from addsol_nl_custom.addsol_nl_custom.plates.grouping import is_weighed_group
 from addsol_nl_custom.addsol_nl_custom.plates.item_defaults import apply_plate_item_defaults
 from addsol_nl_custom.addsol_nl_custom.plates.utils import build_plate_description, build_plate_item_name
@@ -26,6 +27,12 @@ def item_autoname(doc, method):
 		# agree with the name, exactly as the plate branch below keeps them.
 		doc.name = doc.item_name or doc.name
 		doc.item_code = doc.name
+		return
+
+	if is_finished_good(doc):
+		# A finished good is a product the customer makes, and it is named
+		# from the Project it is made for - not from a size. The rule lives in
+		# finished_goods.item_hooks, and the plate rules must not claim it.
 		return
 
 	if doc.custom_thickness_dropdown and doc.item_group:
@@ -57,8 +64,23 @@ def is_cutting_generated(doc) -> bool:
 	return bool(doc.custom_is_offcut or doc.custom_is_remainder)
 
 
+def is_finished_good(doc) -> bool:
+	"""Whether this Item is a finished good, which is named from its Project.
+
+	The plate naming rules are about a plate's size. A finished good is a
+	product the customer makes, and its code is built from the Project it is
+	made for, so the plate rules must not claim it.
+	"""
+	return is_finished_good_group(doc.get("item_group"))
+
+
 def item_validate(doc, method):
 	"""Keep an Item's name, description, weight and stock options in step."""
+	if is_finished_good(doc):
+		# A finished good is not a plate size: it is not weighed per piece and
+		# it is not named from its dimensions.
+		return
+
 	if not (doc.custom_thickness_dropdown and doc.item_group):
 		return
 
