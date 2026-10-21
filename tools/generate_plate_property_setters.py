@@ -35,6 +35,16 @@ PRECISION_6_DOCTYPES = [
 ]
 PRECISION_6_FIELDS = ["rate", "base_rate", "net_rate", "base_net_rate", "price_list_rate"]
 
+# The field order of these DocTypes belongs to the layout patches, which
+# rebuild it from the live metadata on every migrate. A field_order Property
+# Setter freezes the layout, and a frozen order overrides insert_after, so
+# this app never ships one - it lets the patch own it.
+#
+# The export picks the site's runtime setters up, which would put one in the
+# fixture and freeze the layout on the next migrate, so they are dropped
+# here rather than carried over.
+LAYOUT_DOCTYPES = ["Purchase Order Item", "Supplier Quotation Item"]
+
 MODIFIED = "2026-10-14 00:00:00.000000"
 
 
@@ -61,11 +71,24 @@ def owned(prop, field_name):
 	)
 
 
+def is_a_layout_setter(record):
+	"""Is this the field order a layout patch owns?
+
+	See LAYOUT_DOCTYPES: the patch rebuilds it on every migrate, so shipping
+	one in the fixture would freeze the layout.
+	"""
+	return record.get("property") == "field_order" and record.get("doc_type") in LAYOUT_DOCTYPES
+
+
 def main():
 	with open(FIXTURE) as f:
 		existing = json.load(f)
 
-	kept = [p for p in existing if not owned(p.get("property"), p.get("field_name"))]
+	kept = [
+		p
+		for p in existing
+		if not owned(p.get("property"), p.get("field_name")) and not is_a_layout_setter(p)
+	]
 
 	for doc_type in PRECISION_6_DOCTYPES:
 		for field_name in PRECISION_6_FIELDS:

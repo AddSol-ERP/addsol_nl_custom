@@ -616,4 +616,57 @@ Traps:
   `total_` in it. The fields are display only - nothing reads them - so
   fixing it changed nothing else.
 
+## The Purchase Order printouts (2026-10-21)
+
+Two Purchase Order formats are shipped, in two different shapes, and both
+have to carry the plate figures - the amount of a plate line is the weight
+times the rate per kg, so a printout with the amount and neither of them
+cannot be checked against the invoice:
+
+| Format | Shape | Plate figures |
+|---|---|---|
+| `MPO Format` | Print Format Builder layout (`format_data`) | `custom_rate_per_kg` and `custom_est_weight_kg` on the items table |
+| `Purchase order` | Jinja (`html`) | `row.custom_rate_per_kg` and `row.custom_est_weight_kg` |
+
+- **The weight on a printout is the LINE's weight**, not the weight of one
+  plate. `row.custom_est_weight_kg` is the line's total and
+  `row.custom_unit_weight_kg` is one plate; the per-plate figure printed
+  beside the quantity reads as the line's weight, and it is not.
+- **The address lookup in a print template has to be guarded.** A Purchase
+  Order with no supplier address ran `frappe.get_doc('Address', '')` and
+  failed the whole print with "Address not found". The guard is
+  `{% if doc.supplier_address %}` - a supplier is not an address.
+- **A print template should read the fields it needs, not the whole
+  document.** `frappe.db.get_value("Item", row.item_code, [...],
+  as_dict=True)` per line instead of `frappe.get_doc("Item", ...)`, which
+  loads the Item and its child tables once per line.
+- `tests/test_schema.py::TestPrintFormats` pins all of it.
+
+Traps around the fixtures themselves:
+
+- **A print format in the fixture is the source of truth, and it replaces
+  the site's copy on every migrate.** That is deliberate - the site cannot
+  drift away from the app - but it means a format the customer edits in the
+  desk loses the edit on the next migrate. Change the fixture, not the site.
+- **The `field_order` Property Setters of the buying item tables belong to
+  the layout patches and must NOT be in the fixture.** The patches rebuild
+  them from the live metadata on every migrate, because a field_order setter
+  freezes the layout and a frozen order overrides insert_after. The export
+  picks the site's runtime setters up, so
+  `tools/generate_plate_property_setters.py` now drops them
+  (`LAYOUT_DOCTYPES`) rather than carrying them over.
+- **An export can EMPTY the custom field fixture.** The export writes
+  whatever the site matched, and a site whose fixture import failed matches
+  nothing - so `custom_field.json` went from 82 records to `[]`, and a
+  fresh install would have had no plate customisation at all. Nothing in the
+  app said so: the file was simply empty, and the sweep for undeclared
+  `custom_*` names had nothing to complain about.
+  `tests/test_schema.py::TestCustomFieldFixture` now checks the other way
+  round - every field the generator declares has to be in the file - and that
+  the file is not empty.
+- **A fixture that holds a runtime record is a trap in general.** The
+  export is a site snapshot, and the app's fixtures are meant to be the
+  app's own decisions. What the export brought back that was worth keeping:
+  both standard plate reports (the fixture had lost one) and a role profile.
+
 

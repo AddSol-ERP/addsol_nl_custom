@@ -21,6 +21,7 @@ import unittest
 APP_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MODULE_DIR = os.path.join(APP_DIR, "addsol_nl_custom")
 CUSTOM_FIELD_FIXTURE = os.path.join(APP_DIR, "fixtures", "custom_field.json")
+PRINT_FORMAT_FIXTURE = os.path.join(APP_DIR, "fixtures", "print_format.json")
 
 # DocTypes this app builds fields on.
 PLATE_DOCTYPES = {
@@ -74,6 +75,32 @@ def load(path):
 
 def plate_custom_fields():
 	return [f for f in load(CUSTOM_FIELD_FIXTURE) if f["dt"] in PLATE_DOCTYPES]
+
+
+def items_table_columns(layout) -> list:
+	"""The columns of the items table in a Print Format Builder layout.
+
+	The layout is a JSON document of sections, each with columns of fields,
+	and the items table carrying its own `table_columns`. The walk is the same
+	one the layout patch uses to find the table.
+	"""
+
+	def visit(node):
+		if isinstance(node, dict):
+			if node.get("fieldname") == "items":
+				return node.get("table_columns", [])
+			for value in node.values():
+				found = visit(value)
+				if found is not None:
+					return found
+		elif isinstance(node, list):
+			for value in node:
+				found = visit(value)
+				if found is not None:
+					return found
+		return None
+
+	return visit(layout) or []
 
 
 class TestSelectDefaults(unittest.TestCase):
@@ -149,6 +176,39 @@ class TestSelectDefaults(unittest.TestCase):
 
 
 class TestCustomFieldFixture(unittest.TestCase):
+	def test_every_field_the_generator_declares_is_shipped(self):
+		"""The other way round: what the generator declares has to be in the file.
+
+		The export can empty this file - it writes whatever the site matched,
+		and a site whose fixture import failed matches nothing. An empty file
+		means a fresh install gets no plate customisation at all, and nothing
+		else here says so: the file is simply empty, and the sweep below has
+		nothing to complain about.
+		"""
+		import importlib.util
+
+		spec = importlib.util.spec_from_file_location(
+			"gen", os.path.join(os.path.dirname(APP_DIR), "tools", "generate_plate_custom_fields.py")
+		)
+		generator = importlib.util.module_from_spec(spec)
+		spec.loader.exec_module(generator)
+
+		declared = {(dt, fn) for dt, fn, *_ in generator.FIELD_SPECS}
+		shipped = {(f["dt"], f["fieldname"]) for f in load(CUSTOM_FIELD_FIXTURE)}
+
+		missing = sorted(f"{dt}.{fn}" for dt, fn in declared - shipped)
+		self.assertEqual(
+			missing,
+			[],
+			"the fixture ships no field the generator declares: " + ", ".join(missing),
+		)
+
+	def test_the_fixture_is_not_empty(self):
+		self.assertTrue(
+			load(CUSTOM_FIELD_FIXTURE),
+			"the custom field fixture is empty, so the app would ship no custom fields at all",
+		)
+
 	def test_every_plate_field_is_generated_or_hand_tuned(self):
 		"""Anything on a plate DocType has a home, so a generator re-run cannot drop it."""
 		import importlib.util
@@ -329,6 +389,56 @@ class TestFixtures(unittest.TestCase):
 					{"Item", "Item Group", "Batch", "Purchase Receipt Item"},
 					f"{record['doc_type']} has a field_order setter this app must not create",
 				)
+
+
+class TestPrintFormats(unittest.TestCase):
+	"""The plate figures have to be on the printout, or the price cannot be checked.
+
+	The amount of a plate line is the weight times the rate per kg, so a
+	Purchase Order that prints the amount without either of them cannot be
+	checked against the invoice - and the invoice is priced on the accepted
+	weight, which is not the same figure.
+
+	Two Purchase Order formats are shipped, and they are built in two
+	different shapes: MPO Format is a Print Format Builder layout and
+	Purchase order is a Jinja one. The figures are found in two different
+	places, but they have to be there in both.
+	"""
+
+	def print_format(self, name):
+		for record in load(PRINT_FORMAT_FIXTURE):
+			if record["name"] == name:
+				return record
+
+		self.fail(f"the fixture ships no print format named {name}")
+
+	def test_the_builder_layout_carries_the_plate_columns(self):
+		layout = json.loads(self.print_format("MPO Format")["format_data"])
+		columns = {column.get("fieldname") for column in items_table_columns(layout)}
+
+		self.assertIn("custom_rate_per_kg", columns)
+		self.assertIn("custom_est_weight_kg", columns)
+
+	def test_the_jinja_format_carries_the_plate_figures(self):
+		html = self.print_format("Purchase order")["html"]
+
+		self.assertIn("row.custom_rate_per_kg", html)
+		self.assertIn("row.custom_est_weight_kg", html)
+
+	def test_the_jinja_format_prints_the_line_weight_not_the_plate_weight(self):
+		# The per-plate weight beside the line's quantity reads as the line's
+		# weight, and it is not: ten plates weigh ten times as much.
+		html = self.print_format("Purchase order")["html"]
+
+		self.assertIn("row.custom_est_weight_kg", html)
+		self.assertNotIn("custom_estimated_weight", html)
+
+	def test_the_jinja_format_guards_the_address_lookup(self):
+		# A Purchase Order with no supplier address used to fail the whole
+		# print with "Address not found".
+		html = self.print_format("Purchase order")["html"]
+
+		self.assertIn("{% if doc.supplier_address %}", html)
 
 
 class TestFrappeApiUsage(unittest.TestCase):
