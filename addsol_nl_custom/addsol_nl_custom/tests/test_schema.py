@@ -440,6 +440,29 @@ class TestPrintFormats(unittest.TestCase):
 
 		self.assertIn("{% if doc.supplier_address %}", html)
 
+	def test_the_jinja_format_leaves_the_rate_out_for_a_per_kg_line(self):
+		"""The per-plate rate is amount / qty - a derived figure, rounded for
+		display - so it never multiplies out to the amount printed beside it,
+		and it is not a price anybody agreed to: the price is the rate per kg.
+
+		So a line priced per kg shows its weight and its rate per kg, and
+		nothing in the per-piece rate column. That column stays for the lines
+		that are not priced per kg, and the check is on the rate per kg rather
+		than on the plate marker: with weight-based purchasing switched off a
+		plate line carries an ordinary rate, and that rate is a real one.
+		"""
+		html = self.print_format("Purchase order")["html"]
+
+		self.assertIn("{% if not row.custom_rate_per_kg %}", html)
+
+	def test_the_jinja_format_prints_nothing_for_a_line_it_has_no_figures_for(self):
+		# A line that is not priced per kg has no weight and no rate per kg.
+		# Printing "0.000" and "0.0000" for them says more than nothing does.
+		html = self.print_format("Purchase order")["html"]
+
+		self.assertIn("{% if row.custom_est_weight_kg %}", html)
+		self.assertIn("{% if row.custom_rate_per_kg %}", html)
+
 
 class TestFrappeApiUsage(unittest.TestCase):
 	"""Arguments that only exist on get_all / the query builder.

@@ -632,6 +632,18 @@ cannot be checked against the invoice:
   plate. `row.custom_est_weight_kg` is the line's total and
   `row.custom_unit_weight_kg` is one plate; the per-plate figure printed
   beside the quantity reads as the line's weight, and it is not.
+- **The per-piece rate does not belong on a per-kg line.** It is
+  `amount / qty` - a derived figure, rounded for display - so it never
+  multiplies out to the amount printed beside it: 48,000.00 x 10 is
+  480,000.00 and the amount is 480,000.02. And it is not a price anybody
+  agreed to; the price is the rate per kg. So a line priced per kg prints
+  its weight and its rate per kg, and nothing in the per-piece rate
+  column, which stays for the lines that are not priced per kg. The check
+  is on `row.custom_rate_per_kg`, NOT on `custom_is_plate`: with
+  weight-based purchasing switched off a plate line carries an ordinary
+  rate, and that rate is a real one.
+- **A figure that is not there prints nothing, not zero.** "0.000" for a
+  weight a line does not have says more than an empty cell does.
 - **The address lookup in a print template has to be guarded.** A Purchase
   Order with no supplier address ran `frappe.get_doc('Address', '')` and
   failed the whole print with "Address not found". The guard is
