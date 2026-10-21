@@ -147,11 +147,8 @@ FIELD_SPECS = [
 	 {"read_only": 1, "in_list_view": 1, "precision": "3", "depends_on": "eval:doc.custom_is_plate"}),
 	("Purchase Receipt Item", "custom_weight_per_plate_kg", "Float", "Weight per Plate (Kg)", None,
 	 {"read_only": 1, "precision": "3", "depends_on": "eval:doc.custom_is_plate"}),
-	("Purchase Receipt Item", "custom_heat_number", "Data", "Heat Number", None,
-	 {"depends_on": "eval:doc.custom_is_plate",
-	  "description": "One receipt line is one heat number."}),
-	("Purchase Receipt Item", "custom_mtc_no", "Data", "MTC No", None,
-	 {"depends_on": "eval:doc.custom_is_plate", "description": "Mill test certificate number."}),
+	("Purchase Receipt", "custom_truck_net_weight_kg", "Float", "Truck Net Weight (Kg)", None,
+	 {"precision": "3", "description": "Net delivered load weight used to allocate weighbridge weight across weighed receipt lines."}),
 	("Purchase Receipt", "custom_total_est_weight_kg", "Float", "Total Estimated Weight (Kg)", None,
 	 {"read_only": 1, "precision": "3"}),
 	("Purchase Receipt", "custom_total_billable_weight_kg", "Float", "Total Accepted Weight (Kg)", None,
@@ -170,6 +167,12 @@ FIELD_SPECS = [
 	 {"depends_on": "eval:doc.custom_is_plate"}),
 	("Purchase Invoice", "custom_total_billable_weight_kg", "Float", "Total Accepted Weight (Kg)", None,
 	 {"read_only": 1, "precision": "3"}),
+
+	# Heat and mill test certificate belong to inspection evidence.
+	("Quality Inspection", "custom_heat_number", "Data", "Heat Number", None,
+	 {"description": "Heat number verified during quality inspection."}),
+	("Quality Inspection", "custom_mtc_no", "Data", "MTC No", None,
+	 {"description": "Mill test certificate number verified during quality inspection."}),
 
 	# ------------------------------------------------------------------ C5 Batch
 	("Batch", "custom_heat_number", "Data", "Heat Number", None,
@@ -229,8 +232,9 @@ INSERT_AFTER = {
 	("Purchase Receipt Item", "custom_weight_per_plate_kg"): "custom_billable_weight_kg",
 	("Purchase Receipt Item", "custom_heat_number"): "custom_weight_per_plate_kg",
 	("Purchase Receipt Item", "custom_mtc_no"): "custom_heat_number",
-	("Purchase Receipt", "custom_total_est_weight_kg"): "custom_total_billable_weight_kg",
-	("Purchase Receipt", "custom_total_billable_weight_kg"): "total_net_weight",
+	("Purchase Receipt", "custom_truck_net_weight_kg"): "total_net_weight",
+	("Purchase Receipt", "custom_total_est_weight_kg"): "custom_truck_net_weight_kg",
+	("Purchase Receipt", "custom_total_billable_weight_kg"): "custom_total_est_weight_kg",
 	("Purchase Invoice Item", "custom_is_plate"): "rate",
 	("Purchase Invoice Item", "custom_rate_per_kg"): "custom_is_plate",
 	("Purchase Invoice Item", "custom_billable_weight_kg"): "custom_rate_per_kg",
@@ -260,6 +264,8 @@ REMOVED = {
 	# anymore. Its DB column is dropped by bench trim-tables after the
 	# remove_plate_cutting_flow patch has deleted the Custom Field record.
 	("Stock Entry Detail", "custom_cutting_record"),
+	("Purchase Receipt Item", "custom_heat_number"),
+	("Purchase Receipt Item", "custom_mtc_no"),
 }
 
 BOOLEAN_KEYS = {

@@ -23,17 +23,11 @@ WEIGHT_PRECISION = 3
 
 
 def apply_receipt_metadata(doc, method=None) -> None:
-	"""Copy the receipt's weight, rate and heat number onto its batch.
+	"""Copy receipt weight and cost metadata onto its batch and serials.
 
-	Two things are deliberately not gated on the weight-based purchasing flag,
-	because the report is useless without them and the operator has already
-	typed them:
-
-	- a heat number or MTC number on a receipt line belongs on its batch,
-	  whoever typed it;
-	- weight and cost per kg can be derived from the line's own rate and the
-	  plate's theoretical weight, so Plate Stock Register works before the
-	  pricing feature is ever switched on.
+	Weight and cost per kg can be derived from the line's own rate and the
+	plate's theoretical weight, so Plate Stock Register works before the
+	pricing feature is ever switched on.
 
 	Only the *computation* of weight-based prices is behind the flag, and that
 	lives in purchase.py.
@@ -43,9 +37,10 @@ def apply_receipt_metadata(doc, method=None) -> None:
 
 	should_stamp = False
 	for row in doc.get("items", []):
-		if row.get("custom_is_plate") or row.get("custom_heat_number") or row.get("custom_mtc_no"):
+		if row.get("custom_is_plate"):
 			should_stamp = True
 			stamp_row(doc, row)
+	apply_quality_metadata_from_receipt(doc)
 
 	# ERPNext can finish writing the Serial and Batch Bundle as part of the
 	# receipt's submit lifecycle. Re-read the submitted receipt after commit so
@@ -68,12 +63,12 @@ def stamp_submitted_receipt(receipt_name) -> None:
 
 	doc = frappe.get_doc("Purchase Receipt", receipt_name)
 	for row in doc.get("items", []):
-		if row.get("custom_is_plate") or row.get("custom_heat_number") or row.get("custom_mtc_no"):
+		if row.get("custom_is_plate"):
 			stamp_row(doc, row)
 
 
 def stamp_row(receipt, row) -> None:
-	"""Write this line's weight, rate and heat number onto its batch and serials."""
+	"""Write this line's weight and rate onto its batch and serials."""
 	bundle_entries = get_bundle_entries(row)
 	if not bundle_entries:
 		# A post-commit pass re-reads the receipt once ERPNext has finalized its
@@ -83,16 +78,6 @@ def stamp_row(receipt, row) -> None:
 
 	batch_nos = {entry.batch_no for entry in bundle_entries if entry.batch_no}
 
-	if len(batch_nos) > 1:
-		frappe.throw(
-			_(
-				"Row {0} of {1} produced more than one batch ({2}). One receipt line is one "
-				"heat number - split it into separate lines."
-			).format(row.idx, receipt.name, ", ".join(sorted(batch_nos))),
-			title=_("More than one heat number on a receipt line"),
-		)
-
-	heat_number = row.get("custom_heat_number")
 	weight_per_plate = weight_per_plate_of(row)
 	serial_nos = sorted({e.serial_no for e in bundle_entries if e.serial_no})
 
@@ -104,22 +89,84 @@ def stamp_row(receipt, row) -> None:
 	)
 
 	if batch_nos:
-		batch_no = next(iter(batch_nos))
-		update_batch(
-			batch_no,
-			heat_number=heat_number,
-			mtc_no=row.get("custom_mtc_no"),
-			grade=grade_of(row.get("item_code")),
-			weight_per_plate=weight_per_plate,
-			cost_per_kg=cost_per_kg_of(row, weight_per_plate),
-			ratio=ratio,
-			is_plate=bool(row.get("custom_is_plate")),
-		)
+		for batch_no in batch_nos:
+			update_batch(
+				batch_no,
+				heat_number=None,
+				mtc_no=None,
+				grade=grade_of(row.get("item_code")),
+				weight_per_plate=weight_per_plate,
+				cost_per_kg=cost_per_kg_of(row, weight_per_plate),
+				ratio=ratio,
+				is_plate=bool(row.get("custom_is_plate")),
+			)
 	else:
 		print(f"Plate receipt {receipt.name} row {row.idx}: no batch produced; stamping serials only.")
 
 	for serial_no in serial_nos:
-		update_serial(serial_no, weight_per_plate, heat_number)
+		update_serial(serial_no, weight_per_plate, None)
+
+
+def quality_inspection_before_submit(doc, method=None) -> None:
+	"""Require the heat number when an opted-in weighed item is inspected."""
+	if doc.get("reference_type") != "Purchase Receipt" or not doc.get("item_code"):
+		return
+	from addsol_nl_custom.addsol_nl_custom.plates.settings import is_enabled
+	if not is_enabled():
+		return
+	from addsol_nl_custom.addsol_nl_custom.plates.grouping import is_weighed_item
+
+	if is_weighed_item(doc.item_code) and not doc.get("custom_heat_number"):
+		frappe.throw(
+			_("Enter the heat number from the material certificate before submitting this inspection."),
+			title=_("Heat number required"),
+		)
+
+
+def quality_inspection_on_submit(doc, method=None) -> None:
+	"""Copy inspected heat/MTC values to only the batch or serial being inspected."""
+	if doc.get("reference_type") != "Purchase Receipt":
+		return
+	stamp_quality_inspection(doc)
+
+
+def apply_quality_metadata_from_receipt(receipt) -> None:
+	"""Apply QIs that were completed before the receipt created its batches."""
+	if not receipt.get("name"):
+		return
+	for inspection in frappe.get_all(
+		"Quality Inspection",
+		filters={
+			"reference_type": "Purchase Receipt",
+			"reference_name": receipt.name,
+			"docstatus": 1,
+		},
+		fields=["name"],
+		limit_page_length=0,
+	):
+		stamp_quality_inspection(frappe.get_doc("Quality Inspection", inspection.name))
+
+
+def stamp_quality_inspection(doc) -> None:
+	batch_no = doc.get("batch_no")
+	serial_text = (doc.get("item_serial_no") or "").replace(",", "\n").replace(";", "\n")
+	serial_nos = [part.strip() for part in serial_text.splitlines() if part.strip()]
+	if batch_no:
+		update_quality_metadata("Batch", batch_no, doc)
+	for serial_no in serial_nos:
+		update_quality_metadata("Serial No", serial_no, doc)
+
+
+def update_quality_metadata(doctype, name, doc) -> None:
+	if not frappe.db.exists(doctype, name):
+		return
+	values = {
+		"custom_heat_number": doc.get("custom_heat_number"),
+		"custom_mtc_no": doc.get("custom_mtc_no"),
+	}
+	values = {key: value for key, value in values.items() if value not in (None, "")}
+	if values:
+		frappe.db.set_value(doctype, name, values, update_modified=False)
 
 
 def cost_per_kg_of(row, weight_per_plate) -> float:
@@ -227,9 +274,7 @@ def update_serial(serial_no, weight_kg, heat_number) -> None:
 	if not frappe.db.exists("Serial No", serial_no):
 		return
 
-	frappe.db.set_value(
-		"Serial No",
-		serial_no,
-		{"custom_weight_kg": weight_kg, "custom_heat_number": heat_number},
-		update_modified=False,
-	)
+	values = {"custom_weight_kg": weight_kg}
+	if heat_number:
+		values["custom_heat_number"] = heat_number
+	frappe.db.set_value("Serial No", serial_no, values, update_modified=False)

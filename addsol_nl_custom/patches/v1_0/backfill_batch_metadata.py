@@ -34,8 +34,6 @@ def execute():
 			"rate",
 			"serial_and_batch_bundle",
 			"custom_is_plate",
-			"custom_heat_number",
-			"custom_mtc_no",
 			"custom_rate_per_kg",
 			"custom_billable_weight_kg",
 			"custom_est_weight_kg",
@@ -45,7 +43,7 @@ def execute():
 		limit_page_length=0,
 	)
 
-	interesting = [row for row in rows if row.custom_is_plate or row.custom_heat_number or row.custom_mtc_no]
+	interesting = [row for row in rows if row.custom_is_plate]
 
 	print(f"Batch metadata: {len(interesting)} of {len(rows)} submitted receipt line(s) to check.")
 

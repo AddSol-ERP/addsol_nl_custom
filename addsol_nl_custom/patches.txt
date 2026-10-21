@@ -5,6 +5,7 @@ addsol_nl_custom.patches.v1_0.convert_plate_settings_to_single
 
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
+addsol_nl_custom.patches.v1_0.move_receipt_heat_metadata_to_inspection
 addsol_nl_custom.patches.v1_0.ensure_plate_child_table_columns
 addsol_nl_custom.patches.v1_0.drop_supplier_grade_rates
 addsol_nl_custom.patches.v1_0.cleanup_legacy_plate_customizations

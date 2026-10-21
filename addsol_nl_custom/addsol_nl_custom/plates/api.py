@@ -468,6 +468,16 @@ def get_plate_settings():
 	}
 
 
+def ui_purchase_receipt_capabilities():
+	"""Capabilities published through erpnext_ui's optional-app hook contract."""
+	return {"weight_based": get_plate_settings()}
+
+
+def ui_purchase_receipt_item_capabilities(item_code):
+	"""Per-item weighed-stock flag for the generic receipt form."""
+	return {"weight_managed": is_weight_managed_item(item_code)}
+
+
 @frappe.whitelist(allow_guest=False)
 def is_weight_managed_item(item_code=None):
 	"""Tell the purchase forms whether to show weight pricing for an Item."""

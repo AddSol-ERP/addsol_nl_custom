@@ -322,10 +322,11 @@ def set_receipt_weights(doc, row) -> None:
 	)
 
 	supplier_weight = frappe.utils.flt(row.get("custom_supplier_weight_kg"))
+	measured_weight = supplier_weight or frappe.utils.flt(row.get("custom_weighbridge_weight_kg"))
 	estimated = frappe.utils.flt(row.get("custom_est_weight_kg"))
 	row.custom_variance_pct = (
-		round_half_up((supplier_weight - estimated) / estimated * 100, 2)
-		if estimated and supplier_weight
+		round_half_up((measured_weight - estimated) / estimated * 100, 2)
+		if estimated and measured_weight
 		else 0
 	)
 
@@ -343,8 +344,14 @@ def resolve_billable_weight(doc, row) -> None:
 
 	billable = 0.0
 
-	if not supplier:
-		# No weight given at all. Allowed in draft, refused on submit.
+	if not supplier and weighbridge and abs(row.get("custom_variance_pct")) <= tolerance_pct():
+		# Truck net weight can be allocated over eligible lines when the supplier
+		# does not provide per-item weights. This remains a weighbridge reading.
+		billable = weighbridge
+		row.custom_weight_decision = None
+
+	elif not supplier and not weighbridge:
+		# No measured weight given at all. Allowed in draft, refused on submit.
 		billable = 0.0
 
 	elif abs(row.get("custom_variance_pct")) <= tolerance_pct():
@@ -365,6 +372,7 @@ def resolve_billable_weight(doc, row) -> None:
 				).format(row.idx, doc.name, ACCEPT_WEIGHBRIDGE),
 				title=_("Weighbridge weight missing"),
 			)
+
 		billable = weighbridge
 
 	else:
@@ -394,6 +402,19 @@ def pr_before_submit(doc, method=None) -> None:
 				title=_("Receipt line is not ready"),
 			)
 
+	truck_net = frappe.utils.flt(doc.get("custom_truck_net_weight_kg"))
+	if truck_net > 0:
+		allocated = round_half_up(
+			sum(frappe.utils.flt(row.get("custom_weighbridge_weight_kg")) for row in rows),
+			WEIGHT_PRECISION,
+		)
+		if abs(allocated - truck_net) > 0.002:
+			frappe.throw(
+				_("The allocated weighbridge weights ({0} Kg) must equal the truck net weight ({1} Kg).")
+				.format(allocated, truck_net),
+				title=_("Truck weight is not fully allocated"),
+			)
+
 	sum_header(doc, "custom_total_est_weight_kg", rows, "custom_est_weight_kg")
 	sum_header(doc, "custom_total_billable_weight_kg", rows, "custom_billable_weight_kg")
 
@@ -402,12 +423,16 @@ def blocked_reason(doc, row, approver_role) -> str:
 	billable = frappe.utils.flt(row.get("custom_billable_weight_kg"))
 
 	if billable <= 0:
-		if not frappe.utils.flt(row.get("custom_supplier_weight_kg")):
-			return _("the supplier's weight has not been entered.")
+		if not frappe.utils.flt(row.get("custom_supplier_weight_kg")) and not frappe.utils.flt(
+			row.get("custom_weighbridge_weight_kg")
+		):
+			return _("neither a supplier weight nor a weighbridge weight has been entered.")
 		return _("the variance is above tolerance and nobody has chosen which weight to accept.")
 
-	if not row.get("custom_heat_number"):
-		return _("the heat number is missing. One receipt line is one heat number.")
+	if not frappe.utils.flt(row.get("custom_supplier_weight_kg")) and not frappe.utils.flt(
+		row.get("custom_weighbridge_weight_kg")
+	):
+		return _("neither a supplier weight nor a weighbridge weight has been entered.")
 
 	if row.get("custom_weight_decision") and approver_role:
 		if approver_role not in frappe.get_roles():

@@ -2,6 +2,12 @@ app_name = "addsol_nl_custom"
 app_title = "Addsol Nl Custom"
 app_publisher = "Addition Solutions"
 app_description = "Customization done for N L Electromech"
+purchase_receipt_capabilities = [
+	"addsol_nl_custom.addsol_nl_custom.plates.api.ui_purchase_receipt_capabilities",
+]
+purchase_receipt_item_capabilities = [
+	"addsol_nl_custom.addsol_nl_custom.plates.api.ui_purchase_receipt_item_capabilities",
+]
 # TODO(publisher): replace with the real Addition Solutions contact address.
 app_email = "contact@email.com"
 # Must agree with license.txt, which is MIT.
@@ -217,6 +223,10 @@ doc_events = {
 		"before_validate": "addsol_nl_custom.addsol_nl_custom.plates.purchase.pr_before_validate",
 		"before_submit": "addsol_nl_custom.addsol_nl_custom.plates.purchase.pr_before_submit",
 		"on_submit": "addsol_nl_custom.addsol_nl_custom.plates.receipt_meta.apply_receipt_metadata",
+	},
+	"Quality Inspection": {
+		"before_submit": "addsol_nl_custom.addsol_nl_custom.plates.receipt_meta.quality_inspection_before_submit",
+		"on_submit": "addsol_nl_custom.addsol_nl_custom.plates.receipt_meta.quality_inspection_on_submit",
 	},
 	"Purchase Invoice": {
 		"before_validate": "addsol_nl_custom.addsol_nl_custom.plates.purchase.pi_before_validate",
