@@ -393,7 +393,7 @@ fixtures = [
 	# and that patch move together.
 	{
 		"dt": "Print Format",
-		"filters": [["name", "in", ["MPO Format", "Plate Serial Label", "Plate Purchase Receipt"]]],
+		"filters": [["name", "in", ["MPO Format", "Plate Serial Label", "Plate Purchase Receipt", "Purchase order"]]],
 	},
 	{"dt": "Report", "filters": [["module", "=", "Addsol Nl Custom"]]},
 	{"dt": "Role", "filters": [["is_custom", "=", 1]]},
