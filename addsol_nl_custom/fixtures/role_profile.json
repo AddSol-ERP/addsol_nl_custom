@@ -2,6 +2,27 @@
  {
   "docstatus": 0,
   "doctype": "Role Profile",
+  "modified": "2026-10-14 16:02:26.152170",
+  "name": "MANAGER QA",
+  "role_profile": "MANAGER QA",
+  "roles": [
+   {
+    "parent": "MANAGER QA",
+    "parentfield": "roles",
+    "parenttype": "Role Profile",
+    "role": "Employee Self Service"
+   },
+   {
+    "parent": "MANAGER QA",
+    "parentfield": "roles",
+    "parenttype": "Role Profile",
+    "role": "Employee"
+   }
+  ]
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Role Profile",
   "modified": "2025-12-23 14:21:06.998005",
   "name": "Inventory",
   "role_profile": "Inventory",
