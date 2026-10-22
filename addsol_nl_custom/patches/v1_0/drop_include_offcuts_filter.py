@@ -35,6 +35,13 @@ def execute():
 
 	doc.filters = [row for row in doc.filters if row.fieldname != FILTER_NAME]
 	doc.flags.ignore_permissions = True
+	# Saving an existing Report re-validates its links, and this report's
+	# `letter_head` is already "Standard" on sites that have no such Letter Head
+	# (fixture import stored it with `ignore_links`, see
+	# `frappe/modules/import_file.py:233`). Without this the patch would die on
+	# `LinkValidationError: Could not find Letter Head: Standard` before it ever
+	# removed the filter. Only the filter row is being changed here.
+	doc.flags.ignore_links = True
 	doc.save()
 
 

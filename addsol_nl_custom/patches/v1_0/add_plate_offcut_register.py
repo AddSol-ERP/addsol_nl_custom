@@ -66,7 +66,18 @@ def execute():
 	doc.is_standard = "Yes"
 	doc.disabled = 0
 	doc.prepared_report = 0
-	doc.letter_head = "Standard"
+
+	# `letter_head` is a Link, and "Standard" is not present on every site (a
+	# bare site has no Letter Head at all). The fixture ships it because fixture
+	# import sets `ignore_links` (`frappe/modules/import_file.py:233`) before
+	# insert; a patch does not, so writing a missing one throws
+	# `LinkValidationError: Could not find Letter Head: Standard`. The fixture
+	# still owns this default, so only assert it when it actually exists rather
+	# than widening link validation for the whole record. Assigning None
+	# explicitly (not just skipping the assignment) also clears the dangling
+	# link a prior fixture import left behind, which would otherwise fail a
+	# re-run -- that keeps the patch idempotent.
+	doc.letter_head = "Standard" if frappe.db.exists("Letter Head", "Standard") else None
 
 	# The child tables are REPLACED rather than merged. A filter the report no
 	# longer declares must not linger: the SPA builds its filter bar from these
