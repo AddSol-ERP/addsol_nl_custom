@@ -104,7 +104,7 @@ FIELD_SPECS = [
 	("Supplier Quotation Item", "custom_plate_details_section", "Section Break", "Plate Details", None,
 	 {"depends_on": "eval:doc.custom_is_plate"}),
 	("Supplier Quotation Item", "custom_rate_per_kg", "Currency", "Rate per Kg", "currency",
-	 {"read_only": 1, "in_list_view": 0, "precision": "4", "depends_on": "eval:doc.custom_is_plate",
+	 {"read_only": 1, "in_list_view": 1, "precision": "4", "depends_on": "eval:doc.custom_is_plate",
 	  "description": "Worked out from the quoted rate and the plate's weight. It is what the "
 	                 "Purchase Order inherits, so the price is not typed twice."}),
 	("Supplier Quotation Item", "custom_unit_weight_kg", "Float", "Theoretical Wt per Plate (Kg)", None,
