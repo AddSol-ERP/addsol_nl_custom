@@ -71,19 +71,30 @@ def execute():
 	# The child tables are REPLACED rather than merged. A filter the report no
 	# longer declares must not linger: the SPA builds its filter bar from these
 	# rows, so a stale one shows up as a control that filters nothing.
-	doc.filters = [
-		{
-			"fieldname": fieldname,
-			"fieldtype": fieldtype,
-			"label": label,
-			"options": options,
-			"default": None,
-			"mandatory": 0,
-			"wildcard_filter": 0,
-		}
-		for fieldname, fieldtype, label, options in FILTERS
-	]
-	doc.roles = [{"role": role} for role in ROLES]
+	#
+	# Rows are appended, NOT assigned as a list of dicts. A bare
+	# `doc.filters = [{...}]` stores the dicts on the document untouched, and
+	# `Document._set_defaults` then calls `row.is_new()` on a dict during save:
+	# `AttributeError: 'dict' object has no attribute 'is_new'`. `append`
+	# builds a real child document. Clearing first keeps the replace semantics.
+	doc.filters = []
+	for fieldname, fieldtype, label, options in FILTERS:
+		doc.append(
+			"filters",
+			{
+				"fieldname": fieldname,
+				"fieldtype": fieldtype,
+				"label": label,
+				"options": options,
+				"default": None,
+				"mandatory": 0,
+				"wildcard_filter": 0,
+			},
+		)
+
+	doc.roles = []
+	for role in ROLES:
+		doc.append("roles", {"role": role})
 
 	doc.flags.ignore_permissions = True
 	doc.save()
