@@ -15,7 +15,10 @@ non-trivial change; it records the app's data model and known integration traps.
   record and plate cutting records.
 - `addsol_nl_custom/report/`: standard Python Script Reports. Keep the report
   JSON marked `is_standard: "Yes"` when its implementation is in the matching
-  Python module.
+  Python module. `Plate Stock Register` and `Plate Offcut Register` are two
+  populations, not two views of one: the first holds whole plates and the
+  remainder a cutting leaves behind, the second holds the pieces a cutting
+  produced. Do not merge them back into one report with a filter.
 - `addsol_nl_custom/patches/` and `patches.txt`: ordered, idempotent site
   migrations. Add patches in the correct pre/post model-sync section.
 - `addsol_nl_custom/tests/`: Python tests for formula, schema, item, and weight

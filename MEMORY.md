@@ -68,9 +68,10 @@ source of truth.
 
 ## Script Reports
 
-`Plate Stock Register` and `Plate Receipt Weight Variance` have Python
-implementations beside their report JSON. Their Report records must be standard
-(`is_standard: "Yes"`) so Frappe imports the module's `execute()` function.
+`Plate Stock Register`, `Plate Offcut Register` and `Plate Receipt Weight
+Variance` have Python implementations beside their report JSON. Their Report
+records must be standard (`is_standard: "Yes"`) so Frappe imports the module's
+`execute()` function.
 Otherwise Frappe treats them as custom script reports and tries to compile the
 database `report_script`; an empty value raises `TypeError: Not allowed source
 type: "NoneType"`.
@@ -78,6 +79,54 @@ type: "NoneType"`.
 The migration `mark_plate_reports_standard` updates existing Report records as
 well as the JSON definitions. It is listed in `patches.txt`; after deployment,
 run `bench migrate` for the target site.
+
+`add_plate_offcut_register` creates the `Plate Offcut Register` record on sites
+that predate it, and `drop_include_offcuts_filter` removes the filter the
+plate register used to carry. Both are idempotent, and both need a `bench
+migrate` on the target site.
+
+## The plate register and the offcut register are two populations (2026-10-22)
+
+`Plate Stock Register` holds WHOLE PLATES and the remainder a cutting leaves
+behind. `Plate Offcut Register` holds the PIECES a cutting produced. They were
+one report until this change: the plate register had an `include_offcuts`
+checkbox, ON by default, so offcut rows sat in the plate figures and the only
+thing distinguishing them was a flag nobody was looking at.
+
+- **One report per population.** No figure is ever counted in two places, and
+  each register answers one question: how much plate do we hold, and how much
+  offcut do we hold.
+- **The offcut set is the `Plate Offcut Item` child rows, not a flag.** The
+  offcut register INNER JOINs `tabPlate Offcut Item` on the serial number,
+  which is the authoritative "this piece was produced by a cutting" set. The
+  remainder piece has no such row, so it cannot leak in.
+- **The plate register excludes offcuts in SQL**, with
+  `coalesce(i.custom_is_offcut, 0) = 0`. `custom_is_offcut` is a CHECK, so an
+  Item that was never flagged carries NULL rather than 0 -- a plain `= 0` would
+  drop every ordinary plate from the register.
+- **The remainder stays plate stock.** `get_or_create_remainder_item` marks it
+  `custom_is_remainder` and NOT `custom_is_offcut`, because a remainder IS
+  plate stock: it is the piece of the plate the order keeps. It cannot be
+  asserted as a row of the plate register, though -- the cutting issues it
+  against the Project, so its serial is consumed and it is not stock by the
+  time anyone reads a register. The rule is asserted on the Item.
+- **Each offcut piece gets its OWN Batch** (`make_piece_batch` is called once
+  per row), so grouping by the piece's own batch would give one row per piece,
+  which is a list and not a register. The offcut register groups by the SOURCE
+  batch (`Batch.custom_source_batch`, the plate it was cut from): one row per
+  size, per warehouse, per heat. Two cuttings of one size from two plates are
+  two rows, not one row with two pieces in it.
+- **The value comes from the `Plate Offcut Item` row**, which holds what the
+  Repack actually booked for that piece. The batch's cost per kg is the source
+  plate's rate and every piece of a cutting shares it, so cost per kg times
+  weight would reproduce it only approximately -- each piece is priced on its
+  own measured weight. The booked value is the number the ledger holds.
+- **`weight_per_piece` and `value_per_kg` are derived, never stored.** They are
+  quotients of the two figures beside them, and a stored copy drifts the moment
+  a piece's weight is corrected.
+- **The SPA renders both reports from their own metadata.** The report key
+  (`plate-stock-register`, `plate-offcut-register`) is all the SPA sends; the
+  name and the owning app stay in `erpnext_ui`'s `SPA_CUSTOM_REPORTS`.
 
 ## Migrations and validation
 

@@ -65,6 +65,7 @@ doctype_js = {
 	"Plate Offcut": "public/js/plate_offcut.js",
 	"Purchase Order": "public/js/purchase_weight_pricing.js",
 	"Purchase Receipt": "public/js/purchase_weight_pricing.js",
+	"Supplier Quotation": "public/js/purchase_weight_pricing.js",
 	"Sales Order": "public/js/sales_order.js",
 	"Serial No": "public/js/serial_no.js",
 	"Stock Entry": "public/js/document_attachments.js",

@@ -11,6 +11,18 @@ many kilos of that heat number do we hold and what did we pay for it".
 Every column is derived from data the receipt wrote onto the Batch and the
 Serial No, so the totals here and the totals on Stock Balance describe the same
 stock.
+
+OFFCUTS ARE NOT IN HERE. The pieces a cutting produces are stock of their own
+and they are reported by `Plate Offcut Register`; this report holds whole
+plates and the remainder a cutting leaves behind. The split is deliberate --
+one report per population, so no figure is ever counted in two places. It used
+to be a filter on this report (`include_offcuts`, ON by default), which meant
+one report held two populations and the offcut rows were indistinguishable
+from the plate rows except by a flag nobody was looking at.
+
+The remainder stays on this side deliberately: `get_or_create_remainder_item`
+marks it `custom_is_remainder` and NOT `custom_is_offcut`, because a remainder
+IS plate stock -- it is the piece of the plate the order keeps.
 """
 
 import frappe
@@ -45,20 +57,11 @@ def execute(filters=None):
 	filters = filters or {}
 
 	columns = list(COLUMNS)
-	if not filters.get("include_offcuts"):
-		columns.append({"fieldname": "excluded", "label": "Offcuts", "fieldtype": "Data", "hidden": 1})
 
 	data = build_rows(filters)
-	data = [row for row in data if matches_offcut_filter(row, filters)]
 	data.sort(key=lambda row: (row["item"], row["warehouse"], row["batch"]))
 
 	return columns, data, None, get_totals(data), None
-
-
-def matches_offcut_filter(row, filters) -> bool:
-	if filters.get("include_offcuts"):
-		return True
-	return not row.get("is_offcut")
 
 
 def build_rows(filters) -> list[dict]:
@@ -91,7 +94,6 @@ def decorate(group, serial_rows) -> dict:
 			group["item"],
 			[
 				"item_group",
-				"custom_is_offcut",
 				"custom_thickness_dropdown",
 				"custom_length_mm",
 				"custom_width_mm",
@@ -135,7 +137,6 @@ def decorate(group, serial_rows) -> dict:
 		"total_weight": total_weight,
 		"stock_value": stock_value,
 		"value_per_kg": cost_per_kg,
-		"is_offcut": item.custom_is_offcut,
 	}
 
 
@@ -149,7 +150,14 @@ def active_serials(filters) -> list:
 	`item`. Batch uses `item`. Getting them the wrong way round fails only when
 	the report is opened.
 	"""
-	conditions = ["s.status = 'Active'"]
+	# Offcut pieces are reported by `Plate Offcut Register`, so they are excluded
+	# here -- in SQL, not by filtering the rows out afterwards, so they are never
+	# built in the first place.
+	#
+	# `custom_is_offcut` is a CHECK, and an Item that was never flagged carries
+	# NULL rather than 0. A plain `= 0` would therefore drop every ordinary
+	# plate from the register, which is why this is a COALESCE.
+	conditions = ["s.status = 'Active'", "coalesce(i.custom_is_offcut, 0) = 0"]
 
 	for fieldname, column in (
 		("item", "s.item_code"),

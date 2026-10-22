@@ -12,8 +12,7 @@
   {"fieldname": "item", "fieldtype": "Link", "label": "Item", "options": "Item", "get_values": 1},
   {"fieldname": "warehouse", "fieldtype": "Link", "label": "Warehouse", "options": "Warehouse", "get_values": 1},
   {"fieldname": "heat_number", "fieldtype": "Data", "label": "Heat Number", "get_values": 1},
-  {"fieldname": "batch", "fieldtype": "Link", "label": "Batch", "options": "Batch", "get_values": 1},
-  {"fieldname": "include_offcuts", "fieldtype": "Check", "label": "Include Offcuts", "default": "1"}
+  {"fieldname": "batch", "fieldtype": "Link", "label": "Batch", "options": "Batch", "get_values": 1}
  ],
  "is_standard": "Yes",
  "letter_head": "Standard",

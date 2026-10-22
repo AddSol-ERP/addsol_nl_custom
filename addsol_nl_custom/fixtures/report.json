@@ -78,18 +78,6 @@
     "parentfield": "filters",
     "parenttype": "Report",
     "wildcard_filter": 0
-   },
-   {
-    "default": "1",
-    "fieldname": "include_offcuts",
-    "fieldtype": "Check",
-    "label": "Include Offcuts",
-    "mandatory": 0,
-    "options": null,
-    "parent": "Plate Stock Register",
-    "parentfield": "filters",
-    "parenttype": "Report",
-    "wildcard_filter": 0
    }
   ],
   "is_standard": "Yes",
@@ -151,6 +139,152 @@
    },
    {
     "parent": "Plate Stock Register",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "System Manager"
+   }
+  ],
+  "timeout": 0
+ },
+ {
+  "add_total_row": 0,
+  "add_translate_data": 0,
+  "columns": [],
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Report",
+  "filters": [
+   {
+    "default": null,
+    "fieldname": "grade",
+    "fieldtype": "Link",
+    "label": "Grade",
+    "mandatory": 0,
+    "options": "Item Group",
+    "parent": "Plate Offcut Register",
+    "parentfield": "filters",
+    "parenttype": "Report",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "thickness",
+    "fieldtype": "Link",
+    "label": "Thickness",
+    "mandatory": 0,
+    "options": "Thickness",
+    "parent": "Plate Offcut Register",
+    "parentfield": "filters",
+    "parenttype": "Report",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "item",
+    "fieldtype": "Link",
+    "label": "Item",
+    "mandatory": 0,
+    "options": "Item",
+    "parent": "Plate Offcut Register",
+    "parentfield": "filters",
+    "parenttype": "Report",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "warehouse",
+    "fieldtype": "Link",
+    "label": "Warehouse",
+    "mandatory": 0,
+    "options": "Warehouse",
+    "parent": "Plate Offcut Register",
+    "parentfield": "filters",
+    "parenttype": "Report",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "heat_number",
+    "fieldtype": "Data",
+    "label": "Heat Number",
+    "mandatory": 0,
+    "options": null,
+    "parent": "Plate Offcut Register",
+    "parentfield": "filters",
+    "parenttype": "Report",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "batch",
+    "fieldtype": "Link",
+    "label": "Source Batch",
+    "mandatory": 0,
+    "options": "Batch",
+    "parent": "Plate Offcut Register",
+    "parentfield": "filters",
+    "parenttype": "Report",
+    "wildcard_filter": 0
+   }
+  ],
+  "is_standard": "Yes",
+  "javascript": null,
+  "json": null,
+  "letter_head": "Standard",
+  "module": "Addsol Nl Custom",
+  "name": "Plate Offcut Register",
+  "prepared_report": 0,
+  "query": null,
+  "ref_doctype": "Serial No",
+  "reference_report": null,
+  "report_name": "Plate Offcut Register",
+  "report_script": null,
+  "report_type": "Script Report",
+  "roles": [
+   {
+    "parent": "Plate Offcut Register",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Stock User"
+   },
+   {
+    "parent": "Plate Offcut Register",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Stock Manager"
+   },
+   {
+    "parent": "Plate Offcut Register",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Manufacturing User"
+   },
+   {
+    "parent": "Plate Offcut Register",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Manufacturing Manager"
+   },
+   {
+    "parent": "Plate Offcut Register",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Accounts User"
+   },
+   {
+    "parent": "Plate Offcut Register",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Accounts Manager"
+   },
+   {
+    "parent": "Plate Offcut Register",
+    "parentfield": "roles",
+    "parenttype": "Report",
+    "role": "Purchase User"
+   },
+   {
+    "parent": "Plate Offcut Register",
     "parentfield": "roles",
     "parenttype": "Report",
     "role": "System Manager"
