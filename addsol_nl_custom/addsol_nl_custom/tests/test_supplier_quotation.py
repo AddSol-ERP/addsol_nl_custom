@@ -1,17 +1,11 @@
 # Copyright (c) 2026, Your Company and contributors
 # For license information, please see license.txt
 
-"""A plate line on a Supplier Quotation is priced by weight, and the order inherits it.
+"""A plate Supplier Quotation accepts a rate per kg and passes it to the order.
 
-The problem this answers: a Purchase Order built from a Supplier Quotation
-came up with no rate per kg, so the buyer had to type the price again, and
-the two documents could end up disagreeing about it.
-
-So the quotation prices a plate line by weight, exactly as the order does,
-and the rate per kg is WORKED OUT from the quoted rate - the supplier quotes
-a price per plate, and the plate's weight is known. The order inherits the
-figure, because ERPNext's mapper copies a field of the same name from one
-document to the other.
+The supplier can enter a per-kg rate directly or enter a per-plate rate and
+let the hook derive the equivalent. The order inherits the resulting rate,
+because ERPNext's mapper copies a field of the same name between documents.
 
 `bench --site <site> run-tests --app addsol_nl_custom`
 """

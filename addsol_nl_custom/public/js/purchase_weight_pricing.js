@@ -147,9 +147,8 @@ for (const parent_doctype of ["Purchase Order", "Purchase Receipt"]) {
 	});
 }
 
-// The Supplier Quotation is not a purchase order: the rate per kg is worked
-// out from the quoted rate, so there is no rate to offer when the supplier
-// changes. The rows are still marked, so the plate details show.
+// Suppliers can enter the rate per kg on a quotation. A per-plate rate can
+// also be entered; preview_quotation_weights derives the equivalent rate.
 frappe.ui.form.on("Supplier Quotation", {
 	refresh(frm) {
 		refresh_weight_pricing_flags(frm);
@@ -183,9 +182,11 @@ frappe.ui.form.on("Purchase Order Item", {
 	},
 });
 
-// The quotation's figures follow the quoted rate and the quantity, so they
-// are previewed as those two change.
+// The quotation's figures follow its editable per-kg rate and quantity.
 frappe.ui.form.on("Supplier Quotation Item", {
+	custom_rate_per_kg(frm, cdt, cdn) {
+		apply_weight_pricing(frm, cdt, cdn);
+	},
 	rate(frm, cdt, cdn) {
 		preview_quotation_weights(frm, cdt, cdn);
 	},

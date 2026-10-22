@@ -606,26 +606,26 @@ inherits the price. The problem it answers: an order raised from a
 quotation arrived with no rate per kg, so the buyer typed the price again
 and the two documents could disagree about it.
 
-The rate per kg on a quotation is DERIVED, not typed - the supplier quotes
-a price per plate, and the plate's weight is known:
+The supplier can enter the rate per kg directly. If they enter only a
+per-plate rate, the hook derives the equivalent rate per kg:
 
-	rate per kg = quoted rate per plate / kg per plate
+	rate per kg = entered rate per kg OR quoted rate per plate / kg per plate
 	amount      = estimated weight x rate per kg
 	rate        = amount / quantity
 
 - `plates/purchase.py::sq_before_validate` is the hook, on
   `doc_events["Supplier Quotation"]["before_validate"]`. It marks the plate
   rows, applies the Purchase Order's UoM rule (a plate line is in Nos with a
-  conversion factor of 1), works out the two weights, derives the rate per
-  kg and prices the line with the same `apply_amount` the order uses.
+  conversion factor of 1), works out the two weights, preserves an entered
+  rate per kg (or derives one from the per-plate rate) and prices the line
+  with the same `apply_amount` the order uses.
 - **A price is OPTIONAL on a quotation.** A quote is often raised before the
   supplier has answered, so a line with no quoted rate is left alone rather
   than refused. The Purchase Order is where the price is demanded. This is
   the one place the quotation is more permissive than the order.
-- **The rate per kg is a fixed point of the round trip**, and has to be: the
-  quoted rate is worked out from the rate per kg, and the rate per kg is
-  worked out from the quoted rate. Save the quotation twice and nothing
-  moves. `tests/test_supplier_quotation.py` pins it.
+- The entered rate per kg is authoritative. If it is blank and a per-plate
+  rate exists, the hook derives it from the known unit weight. The PO mapper
+  carries the resulting rate per kg forward.
 - **What the supplier quoted and what the weight pricing gives can differ by
   a paisa or two** - the rate per kg is stored at four decimals and a plate
   weighs a quarter of a tonne, so the bound is half a rupee per ten tonnes.
@@ -643,13 +643,10 @@ a price per plate, and the plate's weight is known:
 
 Traps:
 
-- **The client must not rewrite the quoted rate.** On the Purchase Order the
-  buyer types the rate per kg and the app writes the per-piece rate beside
-  it - two different fields. On a quotation the quoted rate IS the per-piece
-  rate, so a preview that set it would fight the buyer mid-typing. The
-  client therefore fills only the two read-only figures
-  (`custom_rate_per_kg`, `custom_est_weight_kg`) and leaves the price to the
-  server on save.
+- The quotation's rate per kg is editable. Changing it previews the per-piece
+  rate, amount, and estimated weight on the form; the server recomputes the
+  same values on save. Entering a per-piece rate derives the equivalent rate
+  per kg when the field is blank.
 - **`public/js/purchase_weight_pricing.js` did not parse, so none of it ran.**
   An `if` statement sat inside the object literal handed to
   `frappe.ui.form.on`, with the braces doubled (`{{` / `}}`) as if the file

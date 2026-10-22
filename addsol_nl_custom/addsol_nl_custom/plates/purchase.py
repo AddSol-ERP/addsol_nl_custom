@@ -196,14 +196,12 @@ def set_po_rate(doc, row) -> None:
 def sq_before_validate(doc, method=None) -> None:
 	"""Price a plate line on a Supplier Quotation by weight.
 
-	Same rule as the Purchase Order, and one difference in where the price
-	comes from. On an order the buyer types the rate per kg. On a quotation it
-	is WORKED OUT from the quoted rate, because the supplier quotes a price per
-	plate and the plate's weight is known. The Purchase Order built from the
-	quotation inherits the figure, so nobody types the price twice.
+	Same rule as the Purchase Order. The supplier can type the rate per kg
+	directly; if they instead enter a per-plate rate, derive the rate per kg
+	from it. The Purchase Order built from the quotation inherits that rate.
 
 	The quotation is not the place to insist on a price: a quote is often
-	raised before the supplier has answered, so a line with no quoted rate is
+	raised before the supplier has answered, so a line with neither rate is
 	left alone. The Purchase Order is where the price is demanded.
 	"""
 	mark_plate_rows(doc)
@@ -224,27 +222,25 @@ def sq_before_validate(doc, method=None) -> None:
 
 
 def set_sq_rate(doc, row) -> None:
-	"""The rate per kg, worked out from the quoted rate, and the line priced by weight.
+	"""Use the entered rate per kg, or derive it from the quoted per-piece rate.
 
-	The quoted rate is per plate and the plate's weight is known, so the two
-	give the price per kg. The line is then priced the way a Purchase Order
-	line is priced: the amount is the estimated weight times the rate per kg,
-	and the per-piece rate follows from that.
+	When the supplier supplies a rate per kg, it is authoritative and the
+	per-piece rate follows from the estimated weight. If only a per-piece rate
+	is supplied, the known plate weight gives us a rate per kg instead.
 
-	The two documents therefore agree exactly, because they price the same
-	weights with the same stored rate per kg. What the supplier quoted and
-	what the weight pricing gives can differ by a paisa or two - the rate per
-	kg is stored at four decimals and a plate weighs a quarter of a tonne -
-	and the quotation carries the weight figure, not the supplier's arithmetic.
+	The quotation and the Purchase Order then price the same estimated weight
+	with the same stored rate per kg.
 	"""
 	unit_weight = frappe.utils.flt(row.get("custom_unit_weight_kg"))
 	quoted_rate = frappe.utils.flt(row.get("rate"))
+	rate_per_kg = frappe.utils.flt(row.get("custom_rate_per_kg"))
+	if not rate_per_kg and unit_weight and quoted_rate:
+		rate_per_kg = round_half_up(quoted_rate / unit_weight, RATE_PER_KG_PRECISION)
+		row.custom_rate_per_kg = rate_per_kg
 
-	if not unit_weight or not quoted_rate:
-		# No price yet, or a plate with no weight to work the price from.
+	if not rate_per_kg:
+		# No price yet, or a plate with no weight to derive one from.
 		return
-
-	row.custom_rate_per_kg = round_half_up(quoted_rate / unit_weight, RATE_PER_KG_PRECISION)
 
 	apply_amount(doc, row, frappe.utils.flt(row.get("custom_est_weight_kg")))
 

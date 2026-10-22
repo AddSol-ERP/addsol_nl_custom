@@ -94,19 +94,16 @@ FIELD_SPECS = [
 	 {"read_only": 1, "precision": "3"}),
 
 	# ---------------------------------------- C4 Supplier Quotation / Item
-	# The same plate fields as the Purchase Order, with one difference: on a
-	# quotation the rate per kg is WORKED OUT from the quoted rate, because
-	# the supplier quotes a price per plate and the plate's weight is known.
-	# It is read-only here, and the Purchase Order built from the quotation
-	# inherits it, so nobody types the price twice.
+	# The supplier can enter the rate per kg directly. If they provide only a
+	# per-plate rate, the hook derives this value from the plate's known weight.
+	# The Purchase Order built from the quotation inherits the entered rate.
 	("Supplier Quotation Item", "custom_is_plate", "Check", "Is Plate", None,
 	 {"read_only": 1, "hidden": 1, "print_hide": 1}),
 	("Supplier Quotation Item", "custom_plate_details_section", "Section Break", "Plate Details", None,
 	 {"depends_on": "eval:doc.custom_is_plate"}),
 	("Supplier Quotation Item", "custom_rate_per_kg", "Currency", "Rate per Kg", "currency",
-	 {"read_only": 1, "in_list_view": 1, "precision": "4", "depends_on": "eval:doc.custom_is_plate",
-	  "description": "Worked out from the quoted rate and the plate's weight. It is what the "
-	                 "Purchase Order inherits, so the price is not typed twice."}),
+	 {"read_only": 0, "in_list_view": 1, "precision": "4", "depends_on": "eval:doc.custom_is_plate",
+	  "description": "Enter the supplier's rate per kg. If left blank, it is derived from the quoted rate."}),
 	("Supplier Quotation Item", "custom_unit_weight_kg", "Float", "Theoretical Wt per Plate (Kg)", None,
 	 {"read_only": 1, "precision": "3", "depends_on": "eval:doc.custom_is_plate",
 	  "fetch_from": "item_code.weight_per_unit", "fetch_if_empty": 1}),
