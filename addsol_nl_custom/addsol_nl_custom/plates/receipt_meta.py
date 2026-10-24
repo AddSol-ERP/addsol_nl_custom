@@ -164,7 +164,11 @@ def update_quality_metadata(doctype, name, doc) -> None:
 		"custom_heat_number": doc.get("custom_heat_number"),
 		"custom_mtc_no": doc.get("custom_mtc_no"),
 	}
-	values = {key: value for key, value in values.items() if value not in (None, "")}
+	values = {
+		key: value
+		for key, value in values.items()
+		if value not in (None, "") and frappe.db.has_column(doctype, key)
+	}
 	if values:
 		frappe.db.set_value(doctype, name, values, update_modified=False)
 
