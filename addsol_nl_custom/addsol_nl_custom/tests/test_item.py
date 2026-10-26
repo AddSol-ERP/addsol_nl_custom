@@ -101,8 +101,8 @@ class TestPlateItem(FrappeTestCase):
 	def test_t1_item_is_named_and_weighed(self):
 		item = make_plate_item()
 
-		# Acceptance test T1 from the specification.
-		self.assertEqual(item.name, "MS Plate 250 Test-10x2500x1250")
+		# Acceptance test T1, with the current T x W x L name order.
+		self.assertEqual(item.name, "MS Plate 250 Test-10x1250x2500")
 		self.assertEqual(item.item_code, item.name)  # B1
 		self.assertEqual(item.custom_estimated_weight, 245.313)  # B3
 		self.assertEqual(item.weight_per_unit, 245.313)
@@ -265,7 +265,7 @@ class TestPlateItem(FrappeTestCase):
 		reloaded.save()
 
 		# The name does not move under an Item that is still unused.
-		self.assertEqual(reloaded.name, "MS Plate 250 Test-10x2500x1250")
+		self.assertEqual(reloaded.name, "MS Plate 250 Test-10x1250x2500")
 		self.assertEqual(reloaded.custom_length_mm, 3000)
 
 	def test_a_new_item_must_be_weighable(self):

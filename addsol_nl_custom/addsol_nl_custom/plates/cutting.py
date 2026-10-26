@@ -416,7 +416,7 @@ def get_or_create_offcut_item(source_item, row) -> str:
 	"""The Item for an offcut, named by its shape and created once.
 
 	One Item per size, shared by every offcut of that size: a rectangle is
-	<group>-<T>x<L>x<W> and a circle is <group>-<T>-D<d>, so a round cut can
+	<group>-<T>x<W>x<L> and a circle is <group>-<T>-D<d>, so a round cut can
 	never be handed the Item of a square one.
 	"""
 	thickness_mm = item_thickness_mm(source_item)

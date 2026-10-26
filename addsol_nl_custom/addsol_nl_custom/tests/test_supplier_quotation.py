@@ -24,7 +24,7 @@ THICKNESS = "10 mm"
 SUPPLIER = "SQ-TEST-SUPPLIER"
 WAREHOUSE = "SQ Test Store"
 
-# A 10 x 2500 x 1250 plate at 0.785 weighs 245.313 kg.
+# A 10 x 1250 x 2500 plate at 0.785 weighs 245.313 kg.
 UNIT_WEIGHT = 245.313
 QUOTED_RATE = 48000.0
 

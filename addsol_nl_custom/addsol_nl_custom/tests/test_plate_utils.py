@@ -18,7 +18,7 @@ class TestPlateUtils(unittest.TestCase):
 	"""Item naming and dimension formatting.
 
 	These used to be f-strings built from Float fields, which produced
-	"MS Plate 250-10x2500.0x1250.0". See Part B2.
+	"MS Plate 250-10x1250.0x2500.0". See Part B2.
 	"""
 
 	def test_fmt_dim_drops_the_trailing_zero(self):
@@ -52,10 +52,10 @@ class TestPlateUtils(unittest.TestCase):
 				fmt_dim(bad)
 
 	def test_build_plate_item_name(self):
-		# The worked example from the specification, Part F3 T1.
+		# The worked example, with width before length in the code.
 		self.assertEqual(
 			build_plate_item_name("MS Plate 250", 10, 2500.0, 1250.0),
-			"MS Plate 250-10x2500x1250",
+			"MS Plate 250-10x1250x2500",
 		)
 
 	def test_build_plate_item_name_with_partial_dimensions(self):
@@ -70,7 +70,7 @@ class TestPlateUtils(unittest.TestCase):
 			build_plate_item_name("MS Plate 250", None, None, None)
 
 	def test_build_plate_description(self):
-		self.assertEqual(build_plate_description(10, 2500.0, 1250.0), "10 x 2500 x 1250 mm")
+		self.assertEqual(build_plate_description(10, 2500.0, 1250.0), "10 x 1250 x 2500 mm")
 		self.assertEqual(build_plate_description(10, None, None), "10 mm")
 
 	def test_round_half_up_matches_javascript(self):

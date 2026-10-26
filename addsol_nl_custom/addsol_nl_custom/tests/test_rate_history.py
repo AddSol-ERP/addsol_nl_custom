@@ -56,8 +56,8 @@ def make_item():
 	The name is not ours to choose: item_autoname derives it from the grade and
 	the dimensions, so callers have to use the name it comes back with.
 	"""
-	if frappe.db.exists("Item", f"{GROUP}-10x2500x1250"):
-		frappe.delete_doc("Item", f"{GROUP}-10x2500x1250", force=True, ignore_missing=True)
+	if frappe.db.exists("Item", f"{GROUP}-10x1250x2500"):
+		frappe.delete_doc("Item", f"{GROUP}-10x1250x2500", force=True, ignore_missing=True)
 
 	return frappe.get_doc(
 		{

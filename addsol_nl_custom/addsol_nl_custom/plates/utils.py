@@ -33,7 +33,7 @@ def fmt_dim(value) -> str:
 	"""Render a dimension for an item name.
 
 	Whole numbers lose the ".0" that a Float field carries - 2500.0 becomes
-	2500, so the name is MS Plate 250-10x2500x1250 and not ...x2500.0x1250.0.
+	2500, so the name is MS Plate 250-10x1250x2500 and not ...x1250.0x2500.0.
 	Anything else keeps at most DIMENSION_PRECISION decimals with no trailing
 	zeros.
 	"""
@@ -59,16 +59,17 @@ def fmt_dim(value) -> str:
 def build_plate_item_name(item_group, thickness_mm, length_mm, width_mm) -> str:
 	"""Name a plate item from its grade and its size.
 
-	Format: <Item Group>-<T>x<L>x<W>, e.g. MS Plate 250-10x2500x1250.
+	Format: <Item Group>-<T>x<W>x<L>, e.g. MS Plate 250-10x1250x2500.
 
 	Only the dimensions that are set are used, so a thickness-only master still
-	gets a name. Thickness is the one dimension that has to be there.
+	gets a name. Width comes before length in the code even though callers pass
+	length first, matching the T x W x L order printed on the purchase forms.
 	"""
 	if not item_group:
 		frappe.throw(_("Item Group is required to name a plate item."))
 
 	dimensions = []
-	for value in (thickness_mm, length_mm, width_mm):
+	for value in (thickness_mm, width_mm, length_mm):
 		if value is None or value == "":
 			continue
 		dimensions.append(fmt_dim(value))
@@ -131,8 +132,8 @@ def require_thickness(item_group, thickness_mm) -> str:
 
 
 def build_plate_description(thickness_mm, length_mm, width_mm) -> str:
-	"""Human readable size, e.g. '10 x 2500 x 1250 mm'."""
-	dimensions = [fmt_dim(value) for value in (thickness_mm, length_mm, width_mm) if value not in (None, "")]
+	"""Human readable size, e.g. '10 x 1250 x 2500 mm'."""
+	dimensions = [fmt_dim(value) for value in (thickness_mm, width_mm, length_mm) if value not in (None, "")]
 
 	if not dimensions:
 		return ""

@@ -254,7 +254,7 @@ mandatory on every Plate Offcut:
   Finally it stamps `custom_weight_kg` and `custom_source_serial_no` onto
   every new serial.
 - Offcuts may be **rectangles or circles**. A rectangle keeps the name
-  `<Item Group>-<T>x<L>x<W>`; a circle is entered by diameter, is named
+  `<Item Group>-<T>x<W>x<L>`; a circle is entered by diameter, is named
   `<Item Group>-<T>-D<d>`, and weighs what the square across it weighs
   times pi/4 (`theoretical_offcut_weight`, applied before the batch's
   actual-to-theoretical ratio). The two shapes can never collide on an
@@ -597,6 +597,20 @@ Traps that cost a look:
   from one test to the next, and a cached set would go stale inside a
   request that creates the group and then uses it - and across the test
   suite, where the group is created in `setUp`.
+
+## Plate Item names are Thickness x Width x Length (2026-10-26)
+
+`plates/utils.py:build_plate_item_name` emits
+`<Item Group>-<T>x<W>x<L>`, e.g. `MS Plate 250-10x1250x2500`, and
+`build_plate_description` spells the size in the same order
+(`10 x 1250 x 2500 mm`). The function signature stays
+`(item_group, thickness_mm, length_mm, width_mm)`, so callers keep passing
+length and width in their field order and the helper emits width first.
+
+Existing Item codes are deliberately NOT migrated: a plate of a size that
+already exists under the old T x L x W name becomes a second Item master
+under the new order. `item_validate` still only warns when an existing Item's
+code differs from its dimensions, so an old code is never moved.
 
 ## Supplier Quotations price plates by weight (2026-10-21)
 
