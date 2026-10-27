@@ -267,21 +267,19 @@ class TestSetPoRate(RateTestBase):
 class TestCopyRateFromOrder(RateTestBase):
 	def test_the_order_rate_is_taken(self):
 		order = make_order(self.item, self.supplier, 62.5)
-		row = plate_row(self.item, order, custom_rate_per_kg=99.0)
+		row = plate_row(self.item, order)
 
 		copy_rate_from_order(po_doc(row), row)
 
 		self.assertEqual(row.custom_rate_per_kg, 62.5)
 
-	def test_a_rate_left_on_the_receipt_is_replaced_not_refused(self):
-		# A receipt is priced at the rate the order agreed. There is nothing to
-		# reconcile, so a stale figure left on the row is simply overwritten.
+	def test_a_receipt_rate_override_is_preserved(self):
 		order = make_order(self.item, self.supplier, 62.5)
 		row = plate_row(self.item, order, custom_rate_per_kg=99.0)
 
 		copy_rate_from_order(po_doc(row), row)
 
-		self.assertEqual(row.custom_rate_per_kg, 62.5)
+		self.assertEqual(row.custom_rate_per_kg, 99.0)
 
 	def test_an_order_line_with_no_rate_is_still_refused(self):
 		order = make_order(self.item, self.supplier, 0)

@@ -269,24 +269,20 @@ def pr_before_validate(doc, method=None) -> None:
 
 
 def copy_rate_from_order(doc, row) -> None:
-	"""A receipt is priced at the rate the order agreed.
-
-	The rate per kg is not typed on a receipt, so there is nothing to reconcile:
-	the order's figure simply stands. If the order line has no rate at all that
-	is a gap in the order, and it is worth saying so.
-	"""
+	"""Default the receipt rate from its PO, preserving a receiving override."""
 	order_row = linked_order_row(row)
 	if not order_row:
 		return
 
-	order_rate = frappe.utils.flt(order_row.get("custom_rate_per_kg"))
-	if not order_rate:
-		frappe.throw(
-			_("Row {0} of {1} links to a Purchase Order line with no rate per kg.").format(row.idx, doc.name),
-			title=_("No rate per kg on the order"),
-		)
+	if not frappe.utils.flt(row.get("custom_rate_per_kg")):
+		order_rate = frappe.utils.flt(order_row.get("custom_rate_per_kg"))
+		if not order_rate:
+			frappe.throw(
+				_("Row {0} of {1} links to a Purchase Order line with no rate per kg.").format(row.idx, doc.name),
+				title=_("No rate per kg on the order"),
+			)
+		row.custom_rate_per_kg = order_rate
 
-	row.custom_rate_per_kg = order_rate
 	# ERPNext's Purchase Receipt mapper does not always carry custom fields from
 	# the Purchase Order Item. Use the committed PO weight as a fallback before
 	# set_receipt_weights() falls back to Item.weight_per_unit. Preserve a value
