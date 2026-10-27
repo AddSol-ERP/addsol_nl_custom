@@ -3,6 +3,10 @@
 
 """Whitelisted helpers the desk forms call."""
 
+from base64 import b64encode
+from io import BytesIO
+from urllib.parse import quote
+
 import frappe
 from frappe import _
 
@@ -386,6 +390,11 @@ def get_offcut_stock(search=None, limit_start=0, limit_page_length=20) -> dict:
 	clause = " AND ".join(where)
 	page_length = min(max(int(limit_page_length or 20), 1), MAX_PAGE_LENGTH)
 	start = max(int(limit_start or 0), 0)
+	order_by = (
+		"CASE WHEN s.name = %(q)s THEN 0 ELSE 1 END, p.creation DESC"
+		if search
+		else "p.creation DESC"
+	)
 
 	rows = frappe.db.sql(
 		f"""
@@ -409,7 +418,7 @@ def get_offcut_stock(search=None, limit_start=0, limit_page_length=20) -> dict:
 		LEFT JOIN `tabItem` i ON i.name = s.item_code
 		LEFT JOIN `tabBatch` b ON b.name = s.batch_no
 		WHERE {clause}
-		ORDER BY p.creation DESC
+		ORDER BY {order_by}
 		LIMIT %(page_length)s OFFSET %(start)s
 		""",
 		{**values, "page_length": page_length, "start": start},
@@ -425,6 +434,8 @@ def get_offcut_stock(search=None, limit_start=0, limit_page_length=20) -> dict:
 		""",
 		values,
 	)[0][0]
+
+	base_url = frappe.utils.get_url()
 
 	pieces = [
 		{
@@ -443,11 +454,28 @@ def get_offcut_stock(search=None, limit_start=0, limit_page_length=20) -> dict:
 			"width_mm": frappe.utils.flt(row.width_mm),
 			# The Plate Offcut that produced it, so a click can open the job.
 			"offcut": row.offcut,
+			"qr_svg_base64": _offcut_qr_svg_base64(base_url, row.serial, row.offcut),
 		}
 		for row in rows
 	]
 
 	return {"pieces": pieces, "total": int(total)}
+
+
+def _offcut_qr_svg_base64(base_url: str, serial: str, offcut_name: str) -> str:
+	"""Create a QR label that opens this registered offcut in the UI."""
+	import pyqrcode
+
+	url = (
+		f"{base_url}/addsol_ui#/store/plate-offcut/{quote(offcut_name, safe='')}"
+		f"?serial={quote(serial, safe='')}"
+	)
+	qr = pyqrcode.create(url)
+	buffer = BytesIO()
+	qr.svg(buffer, scale=5, quiet_zone=2)
+	return b64encode(buffer.getvalue()).decode("ascii")
+
+
 def line_is_drawn(line) -> bool:
 	"""Whether a line carries a size its shape can be weighed at."""
 	if cutting.is_circle(line):
