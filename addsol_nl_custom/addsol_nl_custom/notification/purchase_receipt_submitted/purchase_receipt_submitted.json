@@ -1,0 +1,37 @@
+{
+ "attach_files": "",
+ "attach_print": 0,
+ "channel": "Email",
+ "condition": "doc.docstatus == 1",
+ "creation": "2026-10-27 11:37:56.807536",
+ "days_in_advance": 0,
+ "docstatus": 0,
+ "doctype": "Notification",
+ "document_type": "Purchase Receipt",
+ "enabled": 1,
+ "event": "Submit",
+ "idx": 0,
+ "is_standard": 1,
+ "message": "<p>Dear Team,</p>\n\n<p>A Purchase Receipt has been submitted successfully. Please find the details below.</p>\n\n<table>\n<tr><td><b>Purchase Receipt No.</b></td><td>{{ doc.name }}</td></tr>\n<tr><td><b>Supplier</b></td><td>{{ doc.supplier_name }}</td></tr>\n<tr><td><b>Posting Date</b></td><td>{{ doc.posting_date }}</td></tr>\n<tr><td><b>Purchase Order</b></td><td>{{ doc.items[0].purchase_order if doc.items else \"-\" }}</td></tr>\n<tr><td><b>Company</b></td><td>{{ doc.company }}</td></tr>\n</table>\n\n<p>Please review the Purchase Receipt.</p>\n\n<a href=\"{{ frappe.utils.get_url() }}/addsol_ui#/store/purchase-receipt/{{ doc.name }}\">View Purchase Receipt</a>\n\n\n\n",
+ "message_type": "HTML",
+ "modified": "2026-10-27 11:54:35.851720",
+ "modified_by": "Administrator",
+ "module": "Addsol Nl Custom",
+ "name": "Purchase Receipt Submitted",
+ "owner": "Administrator",
+ "recipients": [
+  {
+   "cc": "deepak@nlemech.com",
+   "receiver_by_role": "Quality Manager"
+  },
+  {
+   "receiver_by_role": "Accounts Manager"
+  },
+  {
+   "receiver_by_role": "Accounts User"
+  }
+ ],
+ "send_system_notification": 0,
+ "send_to_all_assignees": 0,
+ "subject": "Purchase Receipt Submitted - {{ doc.name }} | {{ doc.supplier_name }}"
+}
