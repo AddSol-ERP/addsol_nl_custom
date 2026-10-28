@@ -50,21 +50,52 @@ function extend_purchase_order_update_items_dialog(frm) {
 					(table.data || []).forEach((row) => {
 						const source = rowsByName.get(row.docname);
 						row.custom_rate_per_kg = source?.custom_rate_per_kg || "";
+						row.custom_unit_weight_kg = source?.custom_unit_weight_kg || source?.item_weight_per_unit || "";
 					});
-						table.fields = [
-							...(table.fields || []),
-							{
+					let dialog;
+					const previewRate = async function () {
+						const row = this.doc;
+						const itemCode = row.item_code;
+						const qty = frappe.utils.flt(row.qty);
+						const ratePerKg = frappe.utils.flt(row.custom_rate_per_kg);
+						if (!itemCode || !qty || !ratePerKg) return;
+
+						let unitWeight = frappe.utils.flt(row.custom_unit_weight_kg);
+					if (!unitWeight) {
+						const result = await frappe.db.get_value("Item", itemCode, "weight_per_unit");
+						if (row.item_code !== itemCode) return;
+						unitWeight = frappe.utils.flt(result?.message?.weight_per_unit);
+					}
+					if (!unitWeight) return;
+
+						const amount = frappe.utils.flt(qty * unitWeight * ratePerKg, 2);
+						row.rate = frappe.utils.flt(amount / qty, 6);
+						const gridRow = (table.data || []).find((item) =>
+							(row.docname && item.docname === row.docname) ||
+							(row.name && item.name === row.name) ||
+							(row.idx != null && item.idx === row.idx),
+						);
+					if (gridRow) gridRow.rate = row.rate;
+					dialog?.fields_dict?.trans_items?.grid?.refresh();
+				};
+				const qtyField = table.fields.find((field) => field.fieldname === "qty");
+				if (qtyField) qtyField.onchange = previewRate;
+					table.fields = [
+						...(table.fields || []),
+						{
 								fieldtype: "Currency",
 								fieldname: "custom_rate_per_kg",
 								options: "currency",
-								label: __("Rate per Kg"),
-								precision: 4,
-								in_list_view: 1,
-							},
-						];
+							label: __("Rate per Kg"),
+							precision: 4,
+							in_list_view: 1,
+							onchange: previewRate,
+						},
+					];
 				}
 			}
-			return new OriginalDialog(definition, ...args);
+			dialog = new OriginalDialog(definition, ...args);
+			return dialog;
 		};
 		try {
 			return original.call(this, opts);
