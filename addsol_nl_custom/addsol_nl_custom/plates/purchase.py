@@ -205,14 +205,51 @@ def update_child_qty_rate(parent_doctype, trans_items, parent_doctype_name, chil
 		return core_update(parent_doctype, trans_items, parent_doctype_name, child_docname)
 
 	parent = frappe.get_doc(parent_doctype, parent_doctype_name)
+	existing_names = {row.name for row in parent.get(child_docname, [])}
 	frappe.flags.addsol_po_update_rates = {
 		"rates": requested_rates,
-		"existing_names": {row.name for row in parent.get(child_docname, [])},
+		"existing_names": existing_names,
 	}
 	try:
-		return core_update(parent_doctype, trans_items, parent_doctype_name, child_docname)
+		result = core_update(parent_doctype, trans_items, parent_doctype_name, child_docname)
 	finally:
 		frappe.flags.pop("addsol_po_update_rates", None)
+
+	# The standard endpoint skips rows whose qty/unit rate did not change, even
+	# when their per-kg rate did. Persist the submitted rate values explicitly
+	# after its save; the request-local hook above lets new plate rows pass their
+	# first PO validation even when there is no historical rate yet.
+	parent = frappe.get_doc(parent_doctype, parent_doctype_name)
+	new_rows_by_item = {}
+	for row in parent.get(child_docname, []):
+		if row.name not in existing_names:
+			new_rows_by_item.setdefault(row.item_code, []).append(row)
+
+	for requested in requested_rates:
+		row = next(
+			(
+				child for child in parent.get(child_docname, [])
+				if requested.get("docname") and child.name == requested.get("docname")
+			),
+			None,
+		)
+		if not row:
+			candidates = new_rows_by_item.get(requested.get("item_code"), [])
+			row = candidates.pop(0) if candidates else None
+		if not row:
+			continue
+
+		row.custom_is_plate = 1
+		row.custom_rate_per_kg = frappe.utils.flt(requested.get("custom_rate_per_kg"))
+		set_line_weights(parent, row)
+		apply_amount(parent, row, row.custom_est_weight_kg)
+		row.flags.ignore_validate_update_after_submit = True
+		row.save(ignore_permissions=True)
+
+	parent.reload()
+	parent.flags.ignore_validate_update_after_submit = True
+	parent.save(ignore_permissions=True)
+	return result
 
 
 def set_line_weights(doc, row) -> None:
