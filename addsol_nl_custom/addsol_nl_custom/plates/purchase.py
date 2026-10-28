@@ -138,6 +138,7 @@ def assert_amount_reconciles(doc, row) -> None:
 
 
 def po_before_validate(doc, method=None) -> None:
+	apply_update_dialog_rates(doc)
 	mark_plate_rows(doc)
 
 	if not is_enabled():
@@ -153,6 +154,65 @@ def po_before_validate(doc, method=None) -> None:
 		set_po_rate(doc, row)
 
 	sum_header(doc, "custom_total_est_weight_kg", rows, "custom_est_weight_kg")
+
+
+def apply_update_dialog_rates(doc) -> None:
+	"""Apply rates from ERPNext's Update Items request before PO repricing."""
+	context = getattr(frappe.flags, "addsol_po_update_rates", None) or {}
+	requested = context.get("rates", [])
+	existing_names = context.get("existing_names", set())
+	used = set()
+	for row in doc.get("items", []):
+		for index, item in enumerate(requested):
+			if index in used or item.get("item_code") != row.get("item_code"):
+				continue
+			if item.get("docname"):
+				if item.get("docname") != row.get("name"):
+					continue
+			elif row.get("name") in existing_names:
+				continue
+			if not is_weighed_item(row.get("item_code")):
+				continue
+			row.custom_is_plate = 1
+			row.custom_rate_per_kg = frappe.utils.flt(item.get("custom_rate_per_kg"))
+			used.add(index)
+			break
+
+
+@frappe.whitelist()
+def update_child_qty_rate(parent_doctype, trans_items, parent_doctype_name, child_docname="items"):
+	"""Keep the per-kg rate when ERPNext's submitted-document dialog updates a PO.
+
+	The standard Update Items dialog sends only the ordinary unit rate. Its
+	client is extended by purchase_weight_pricing.js to include
+	``custom_rate_per_kg``. The request-local rates are applied by
+	``po_before_validate`` during ERPNext's normal parent save, before the PO
+	pricing hook derives the line amount.
+	"""
+	from erpnext.controllers.accounts_controller import update_child_qty_rate as core_update
+
+	if parent_doctype != "Purchase Order" or not is_enabled():
+		return core_update(parent_doctype, trans_items, parent_doctype_name, child_docname)
+
+	items = frappe.parse_json(trans_items) or []
+	requested_rates = [
+		row for row in items
+		if frappe.utils.flt(row.get("custom_rate_per_kg")) > 0
+		and row.get("item_code")
+		and is_weighed_item(row.get("item_code"))
+	]
+	if not requested_rates:
+		return core_update(parent_doctype, trans_items, parent_doctype_name, child_docname)
+
+	parent = frappe.get_doc(parent_doctype, parent_doctype_name)
+	frappe.flags.addsol_po_update_rates = {
+		"rates": requested_rates,
+		"existing_names": {row.name for row in parent.get(child_docname, [])},
+	}
+	try:
+		return core_update(parent_doctype, trans_items, parent_doctype_name, child_docname)
+	finally:
+		frappe.flags.pop("addsol_po_update_rates", None)
 
 
 def set_line_weights(doc, row) -> None:
