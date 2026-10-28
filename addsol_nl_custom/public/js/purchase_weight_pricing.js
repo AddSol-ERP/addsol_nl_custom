@@ -77,8 +77,30 @@ function extend_purchase_order_update_items_dialog(frm) {
 						);
 					if (gridRow) gridRow.rate = row.rate;
 					dialog?.fields_dict?.trans_items?.grid?.refresh();
-				};
-				const qtyField = table.fields.find((field) => field.fieldname === "qty");
+					};
+					const prepareRatesBeforeUpdate = async function () {
+						for (const row of table.data || []) {
+							if (!row.item_code || !frappe.utils.flt(row.qty) || !frappe.utils.flt(row.custom_rate_per_kg)) {
+								continue;
+							}
+							const itemCode = row.item_code;
+							let unitWeight = frappe.utils.flt(row.custom_unit_weight_kg);
+							if (!unitWeight) {
+								const result = await frappe.db.get_value("Item", itemCode, "weight_per_unit");
+								if (row.item_code !== itemCode) continue;
+								unitWeight = frappe.utils.flt(result?.message?.weight_per_unit);
+								row.custom_unit_weight_kg = unitWeight;
+							}
+							if (!unitWeight) continue;
+							const amount = frappe.utils.flt(
+								frappe.utils.flt(row.qty) * unitWeight * frappe.utils.flt(row.custom_rate_per_kg),
+								2,
+							);
+							row.rate = frappe.utils.flt(amount / frappe.utils.flt(row.qty), 6);
+						}
+						dialog?.fields_dict?.trans_items?.grid?.refresh();
+					};
+					const qtyField = table.fields.find((field) => field.fieldname === "qty");
 				if (qtyField) qtyField.onchange = previewRate;
 					table.fields = [
 						...(table.fields || []),
@@ -92,6 +114,11 @@ function extend_purchase_order_update_items_dialog(frm) {
 							onchange: previewRate,
 						},
 					];
+					const primaryAction = definition.primary_action;
+					definition.primary_action = async function (...args) {
+						await prepareRatesBeforeUpdate();
+						return primaryAction?.apply(this, args);
+					};
 				}
 			}
 			dialog = new OriginalDialog(definition, ...args);
