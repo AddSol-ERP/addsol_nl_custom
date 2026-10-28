@@ -34,6 +34,11 @@ async function update_weight_pricing_flag(frm, cdt, cdn) {
 // ERPNext's standard Update Items dialog only exposes qty and the per-piece
 // rate. Add the plate rate alongside those fields and seed existing rows from
 // their saved value. The server endpoint below persists and reprices it.
+const toFloat = (value, precision) => {
+	const number = Number.parseFloat(value) || 0;
+	return precision == null ? number : Number(number.toFixed(precision));
+};
+
 function extend_purchase_order_update_items_dialog(frm) {
 	if (frm.doc.doctype !== "Purchase Order" || !erpnext.utils?.update_child_items) return;
 	const original = erpnext.utils.update_child_items;
@@ -56,20 +61,20 @@ function extend_purchase_order_update_items_dialog(frm) {
 					const previewRate = async function () {
 						const row = this.doc;
 						const itemCode = row.item_code;
-						const qty = frappe.utils.flt(row.qty);
-						const ratePerKg = frappe.utils.flt(row.custom_rate_per_kg);
+						const qty = toFloat(row.qty);
+						const ratePerKg = toFloat(row.custom_rate_per_kg);
 						if (!itemCode || !qty || !ratePerKg) return;
 
-						let unitWeight = frappe.utils.flt(row.custom_unit_weight_kg);
+						let unitWeight = toFloat(row.custom_unit_weight_kg);
 					if (!unitWeight) {
 						const result = await frappe.db.get_value("Item", itemCode, "weight_per_unit");
 						if (row.item_code !== itemCode) return;
-						unitWeight = frappe.utils.flt(result?.message?.weight_per_unit);
+						unitWeight = toFloat(result?.message?.weight_per_unit);
 					}
 					if (!unitWeight) return;
 
-						const amount = frappe.utils.flt(qty * unitWeight * ratePerKg, 2);
-						row.rate = frappe.utils.flt(amount / qty, 6);
+						const amount = toFloat(qty * unitWeight * ratePerKg, 2);
+						row.rate = toFloat(amount / qty, 6);
 						const gridRow = (table.data || []).find((item) =>
 							(row.docname && item.docname === row.docname) ||
 							(row.name && item.name === row.name) ||
@@ -80,23 +85,23 @@ function extend_purchase_order_update_items_dialog(frm) {
 					};
 					const prepareRatesBeforeUpdate = async function () {
 						for (const row of table.data || []) {
-							if (!row.item_code || !frappe.utils.flt(row.qty) || !frappe.utils.flt(row.custom_rate_per_kg)) {
+							if (!row.item_code || !toFloat(row.qty) || !toFloat(row.custom_rate_per_kg)) {
 								continue;
 							}
 							const itemCode = row.item_code;
-							let unitWeight = frappe.utils.flt(row.custom_unit_weight_kg);
+							let unitWeight = toFloat(row.custom_unit_weight_kg);
 							if (!unitWeight) {
 								const result = await frappe.db.get_value("Item", itemCode, "weight_per_unit");
 								if (row.item_code !== itemCode) continue;
-								unitWeight = frappe.utils.flt(result?.message?.weight_per_unit);
+								unitWeight = toFloat(result?.message?.weight_per_unit);
 								row.custom_unit_weight_kg = unitWeight;
 							}
 							if (!unitWeight) continue;
-							const amount = frappe.utils.flt(
-								frappe.utils.flt(row.qty) * unitWeight * frappe.utils.flt(row.custom_rate_per_kg),
+							const amount = toFloat(
+								toFloat(row.qty) * unitWeight * toFloat(row.custom_rate_per_kg),
 								2,
 							);
-							row.rate = frappe.utils.flt(amount / frappe.utils.flt(row.qty), 6);
+							row.rate = toFloat(amount / toFloat(row.qty), 6);
 						}
 						dialog?.fields_dict?.trans_items?.grid?.refresh();
 					};
@@ -144,7 +149,7 @@ const RATE_IS_ENTERED = ["Purchase Order Item", "Purchase Receipt Item"];
 async function suggest_rate_per_kg(frm, cdt, cdn) {
 	const row = locals[cdt][cdn];
 	if (!row.item_code || !row.custom_is_plate) return;
-	if (frappe.utils.flt(row.custom_rate_per_kg)) return;
+	if (toFloat(row.custom_rate_per_kg)) return;
 
 	const result = await frappe.call({
 		method: "addsol_nl_custom.addsol_nl_custom.plates.api.get_last_rate",
@@ -153,7 +158,7 @@ async function suggest_rate_per_kg(frm, cdt, cdn) {
 	// The row may have been retyped onto another item while we waited.
 	if (locals[cdt][cdn].item_code !== row.item_code) return;
 
-	const rate = frappe.utils.flt(result && result.message);
+	const rate = toFloat(result && result.message);
 	if (rate) {
 		await frappe.model.set_value(cdt, cdn, "custom_rate_per_kg", rate);
 	}
@@ -169,16 +174,16 @@ async function preview_quotation_weights(frm, cdt, cdn) {
 	const row = locals[cdt][cdn];
 	if (!row.custom_is_plate) return;
 
-	const unit_weight = frappe.utils.flt(row.custom_unit_weight_kg);
+	const unit_weight = toFloat(row.custom_unit_weight_kg);
 	if (!unit_weight) return;
 
-	const quoted_rate = frappe.utils.flt(row.rate);
+	const quoted_rate = toFloat(row.rate);
 	if (quoted_rate) {
 		await frappe.model.set_value(
 			cdt,
 			cdn,
 			"custom_rate_per_kg",
-			frappe.utils.flt(quoted_rate / unit_weight, 4)
+			toFloat(quoted_rate / unit_weight, 4)
 		);
 	}
 
@@ -186,7 +191,7 @@ async function preview_quotation_weights(frm, cdt, cdn) {
 		cdt,
 		cdn,
 		"custom_est_weight_kg",
-		frappe.utils.flt(frappe.utils.flt(row.qty) * unit_weight, 3)
+		toFloat(toFloat(row.qty) * unit_weight, 3)
 	);
 }
 
@@ -200,18 +205,18 @@ function apply_weight_pricing(frm, cdt, cdn) {
 	const row = locals[cdt][cdn];
 	if (!row.custom_is_plate) return;
 
-	const rate_per_kg = frappe.utils.flt(row.custom_rate_per_kg);
-	const qty = frappe.utils.flt(row.qty);
+	const rate_per_kg = toFloat(row.custom_rate_per_kg);
+	const qty = toFloat(row.qty);
 	// The server derives the estimated weight from qty x unit weight just
 	// before pricing, so do the same and only fall back to the stored
 	// estimate when the unit weight has not been fetched yet.
 	const billable_kg =
-		frappe.utils.flt(row.custom_unit_weight_kg) * qty ||
-		frappe.utils.flt(row.custom_est_weight_kg);
+		toFloat(row.custom_unit_weight_kg) * qty ||
+		toFloat(row.custom_est_weight_kg);
 	if (!rate_per_kg || !qty || !billable_kg) return;
 
-	const amount = frappe.utils.flt(billable_kg * rate_per_kg, 2);
-	const rate = frappe.utils.flt(amount / qty, RATE_PRECISION);
+	const amount = toFloat(billable_kg * rate_per_kg, 2);
+	const rate = toFloat(amount / qty, RATE_PRECISION);
 
 	// Setting rate fires ERPNext's own handlers, which recalculate amount and
 	// the base currency fields for us.
@@ -285,7 +290,7 @@ frappe.ui.form.on("Purchase Order Item", {
 	// The unit weight can be fetched from the Item just after the rate is
 	// suggested, so reprice once it lands as well.
 	custom_unit_weight_kg(frm, cdt, cdn) {
-		if (frappe.utils.flt(locals[cdt][cdn].custom_rate_per_kg)) {
+		if (toFloat(locals[cdt][cdn].custom_rate_per_kg)) {
 			apply_weight_pricing(frm, cdt, cdn);
 		}
 	},
