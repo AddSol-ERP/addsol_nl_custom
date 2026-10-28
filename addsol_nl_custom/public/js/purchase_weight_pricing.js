@@ -12,6 +12,12 @@ async function update_weight_pricing_flag(frm, cdt, cdn) {
 	if (locals[cdt][cdn].item_code !== item_code) return;
 
 	const is_weight_managed = Boolean(result && result.message);
+	// ERPNext's Update Items action can add a row to a submitted PO. The server
+	// sets this flag while updating the parent; never try to mutate it from the
+	// browser after submission, where Frappe correctly locks child fields.
+	if (frm.doc.docstatus === 1) {
+		return;
+	}
 	if (Boolean(row.custom_is_plate) !== is_weight_managed) {
 		await frappe.model.set_value(cdt, cdn, "custom_is_plate", is_weight_managed ? 1 : 0);
 	}
@@ -23,6 +29,50 @@ async function update_weight_pricing_flag(frm, cdt, cdn) {
 		}
 	}
 	frm.refresh_field("items");
+}
+
+// ERPNext's standard Update Items dialog only exposes qty and the per-piece
+// rate. Add the plate rate alongside those fields and seed existing rows from
+// their saved value. The server endpoint below persists and reprices it.
+function extend_purchase_order_update_items_dialog(frm) {
+	if (frm.doc.doctype !== "Purchase Order" || !erpnext.utils?.update_child_items) return;
+	const original = erpnext.utils.update_child_items;
+	if (original.__addsol_rate_per_kg) return;
+	erpnext.utils.update_child_items = function (opts) {
+		if (opts?.frm?.doc?.doctype !== "Purchase Order") return original.call(this, opts);
+
+		const OriginalDialog = frappe.ui.Dialog;
+		frappe.ui.Dialog = function (definition, ...args) {
+			if (definition?.title === __("Update Items")) {
+				const table = (definition.fields || []).find((field) => field.fieldname === "trans_items");
+				if (table) {
+					const rowsByName = new Map((frm.doc.items || []).map((row) => [row.name, row]));
+					(table.data || []).forEach((row) => {
+						const source = rowsByName.get(row.docname);
+						row.custom_rate_per_kg = source?.custom_rate_per_kg || "";
+					});
+						table.fields = [
+							...(table.fields || []),
+							{
+								fieldtype: "Currency",
+								fieldname: "custom_rate_per_kg",
+								options: "currency",
+								label: __("Rate per Kg"),
+								precision: 4,
+								in_list_view: 1,
+							},
+						];
+				}
+			}
+			return new OriginalDialog(definition, ...args);
+		};
+		try {
+			return original.call(this, opts);
+		} finally {
+			frappe.ui.Dialog = OriginalDialog;
+		}
+	};
+	erpnext.utils.update_child_items.__addsol_rate_per_kg = true;
 }
 
 // The documents where the buyer TYPES the rate per kg. A Supplier Quotation
@@ -125,6 +175,7 @@ function refresh_weight_pricing_flags(frm) {
 for (const parent_doctype of ["Purchase Order", "Purchase Receipt"]) {
 	frappe.ui.form.on(parent_doctype, {
 		refresh(frm) {
+			if (frm.doc.doctype === "Purchase Order") extend_purchase_order_update_items_dialog(frm);
 			refresh_weight_pricing_flags(frm);
 			// `doctype_js` is a dict, so this file owns Purchase Receipt and the
 			// attachments panel cannot claim it. It lives in

@@ -262,10 +262,11 @@ doc_events = {
 
 # Overriding Methods
 # ------------------------------
-#
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "addsol_nl_custom.event.get_events"
-# }
+
+override_whitelisted_methods = {
+	"erpnext.controllers.accounts_controller.update_child_qty_rate":
+		"addsol_nl_custom.addsol_nl_custom.plates.purchase.update_child_qty_rate",
+}
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
