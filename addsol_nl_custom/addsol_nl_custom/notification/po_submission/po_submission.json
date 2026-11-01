@@ -1,0 +1,35 @@
+{
+ "attach_files": "",
+ "attach_print": 1,
+ "channel": "Email",
+ "condition": "doc.docstatus == 1",
+ "creation": "2026-10-24 15:14:26.237425",
+ "days_in_advance": 0,
+ "docstatus": 0,
+ "doctype": "Notification",
+ "document_type": "Purchase Order",
+ "enabled": 1,
+ "event": "Submit",
+ "idx": 0,
+ "is_standard": 1,
+ "message": "<div style=\"font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;\">\n\n    <p>Dear {{ doc.supplier_name }},</p>\n\n    <p>\n        Please find attached our Purchase Order\n        <strong>{{ doc.name }}</strong>,\n        dated {{ frappe.utils.formatdate(doc.transaction_date) }}.\n    </p>\n\n    <p>\n        Kindly review the Purchase Order and confirm your acceptance.\n    </p>\n\n    <p>\n        Please ensure that the materials are supplied as per the\n        specifications, quantities, rates and terms mentioned in\n        the Purchase Order.\n    </p>\n\n    <p>\n        For any clarification, please contact our purchase department.\n    </p>\n\n    <p>\n        Regards,<br>\n        <strong>Purchase Department</strong><br>\n        N L Electromech Private Limited\n    </p>\n\n</div>\n",
+ "message_type": "Markdown",
+ "modified": "2026-11-01 22:24:32.245467",
+ "modified_by": "Administrator",
+ "module": "Addsol Nl Custom",
+ "name": "PO Submission",
+ "owner": "Administrator",
+ "print_format": "Purchase order",
+ "recipients": [
+  {
+   "bcc": "",
+   "cc": "stores@nlemech.com,accounts@nlemech.com,deepak@nlemech.com,yogesh@nlemech.com",
+   "receiver_by_document_field": "contact_email"
+  }
+ ],
+ "send_system_notification": 1,
+ "send_to_all_assignees": 0,
+ "sender": "N L Electromech Private Limited",
+ "sender_email": "erp@nlemech.com",
+ "subject": "Purchase Order {{ doc.name }} | N L Electromech Private Limited"
+}

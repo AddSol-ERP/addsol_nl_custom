@@ -1,6 +1,38 @@
 [
  {
   "default_value": null,
+  "doc_type": "Purchase Receipt",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocType",
+  "field_name": null,
+  "is_system_generated": 1,
+  "modified": "2026-10-29 12:44:55.540820",
+  "module": null,
+  "name": "Purchase Receipt-main-default_print_format",
+  "property": "default_print_format",
+  "property_type": "Data",
+  "row_name": null,
+  "value": "NL Purchase Receipt"
+ },
+ {
+  "default_value": null,
+  "doc_type": "Purchase Order Item",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "custom_rate_per_pricing_uom",
+  "is_system_generated": 0,
+  "modified": "2026-10-29 18:14:40.273232",
+  "module": null,
+  "name": "Purchase Order Item-custom_rate_per_pricing_uom-non_negative",
+  "property": "non_negative",
+  "property_type": "Check",
+  "row_name": null,
+  "value": "1"
+ },
+ {
+  "default_value": null,
   "doc_type": "Purchase Order Item",
   "docstatus": 0,
   "doctype": "Property Setter",
