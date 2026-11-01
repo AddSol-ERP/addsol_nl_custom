@@ -41,7 +41,7 @@ def get_theoretical_weight(
 
 
 @frappe.whitelist(allow_guest=False)
-def estimate_offcut_weights(source_serial_no, rows, scrap_weight_kg=None) -> dict:
+def estimate_offcut_weights(source_serial_no, rows, scrap_weight_kg=None, scrap_pricing_qty=None) -> dict:
 	"""Preview every offcut's weight and the cutting's total while the form is open.
 
 	public/js/plate_offcut.js asks for this whenever a dimension, a shape or a
@@ -79,13 +79,17 @@ def estimate_offcut_weights(source_serial_no, rows, scrap_weight_kg=None) -> dic
 		line = frappe._dict(line)
 		estimate = {"name": line.get("name")}
 
-		if line_is_drawn(line):
+		if line_is_drawn(line) and not (
+			(details.get("pricing_snapshot") or {}).get("rule", {}).get("formula_mode") == "Direct Entry"
+			and not line.get("pricing_qty")
+		):
 			row = frappe._dict(
 				{
 					"shape": line.shape,
 					"length_mm": line.length_mm,
 					"width_mm": line.width_mm,
 					"diameter_mm": line.diameter_mm,
+					"pricing_qty": line.get("pricing_qty"),
 				}
 			)
 			cutting.compute_offcut(row, details)
@@ -93,9 +97,10 @@ def estimate_offcut_weights(source_serial_no, rows, scrap_weight_kg=None) -> dic
 				theoretical_weight_kg=row.theoretical_weight_kg,
 				weight_kg=row.weight_kg,
 				value=row.value,
+				pricing_qty=row.get("pricing_qty") or 0,
 			)
 		else:
-			estimate.update(theoretical_weight_kg=0.0, weight_kg=0.0, value=0.0)
+			estimate.update(theoretical_weight_kg=0.0, weight_kg=0.0, value=0.0, pricing_qty=0.0)
 
 		previewed.append(estimate)
 		weights.append(estimate["weight_kg"])
@@ -112,6 +117,10 @@ def estimate_offcut_weights(source_serial_no, rows, scrap_weight_kg=None) -> dic
 	# booked. `auto_scrap_weight` is gone along with the old design.
 	min_length, min_width = cutting.minimum_offcut(details["grade"])
 
+	if details.get("pricing_snapshot"):
+		scrap_weight_kg = (
+			details["weight"] * float(scrap_pricing_qty or 0) / details["pricing_snapshot"]["quantity"]
+		)
 	totals = cutting.offcut_totals(
 		source_weight_kg=details["weight"],
 		scrap_weight_kg=frappe.utils.flt(scrap_weight_kg),
@@ -120,7 +129,21 @@ def estimate_offcut_weights(source_serial_no, rows, scrap_weight_kg=None) -> dic
 		cost_per_kg=details["cost_per_kg"],
 	)
 
+	pricing = {}
+	if details.get("pricing_snapshot"):
+		snapshot = details["pricing_snapshot"]
+		pricing = cutting.pricing_totals(
+			snapshot, [row["pricing_qty"] for row in previewed], values, scrap_pricing_qty
+		)
+		for row, value in zip(previewed, pricing.pop("allocated_values"), strict=True):
+			row["value"] = value
+		pricing["formula_mode"] = snapshot["rule"]["formula_mode"]
+		pricing["source_cost_per_uom"] = snapshot["cost_per_uom"]
+		# Preserve the physical-weight response contract; override only money.
+		for field in ("scrap_value", "consumed_value", "total_offcut_value"):
+			totals[field] = pricing[field]
 	return {
+		**pricing,
 		"source_weight_kg": totals["source_weight_kg"],
 		"source_plate_text": details["plate_text"],
 		"rows": previewed,
@@ -218,11 +241,14 @@ def get_available_plates(warehouse=None, search=None, limit_start=0, limit_page_
 	frappe.has_permission("Serial No", "read", throw=True)
 
 	weighed = _weighed_item_groups()
-	if not weighed:
+	has_pricing = frappe.get_meta("Serial No").has_field("custom_offcut_pricing_snapshot")
+	if not weighed and not has_pricing:
 		return {"groups": [], "total": 0}
-
-	where = ["s.status = 'Active'", "i.item_group IN %(weighed)s"]
-	values = {"weighed": tuple(weighed)}
+	eligible = "i.item_group IN %(weighed)s"
+	if has_pricing:
+		eligible = f"({eligible} OR COALESCE(s.custom_offcut_pricing_qty, 0) > 0)"
+	where = ["s.status = 'Active'", eligible]
+	values = {"weighed": tuple(weighed) or ("",)}
 
 	if warehouse:
 		where.append("s.warehouse = %(warehouse)s")
@@ -240,7 +266,10 @@ def get_available_plates(warehouse=None, search=None, limit_start=0, limit_page_
 	# the same two conditions `get_source_details` and `plate_offcut.py` check.
 	# Repeated verbatim in the aggregate below so a blocked plate is counted the
 	# same way it is labelled; the two must not be able to disagree.
-	BLOCKED = "(COALESCE(s.custom_weight_kg, 0) <= 0 OR s.warehouse IS NULL OR s.warehouse = '')"
+	measure_available = "COALESCE(s.custom_weight_kg, 0) > 0"
+	if has_pricing:
+		measure_available = f"({measure_available} OR COALESCE(s.custom_offcut_pricing_qty, 0) > 0)"
+	BLOCKED = f"(NOT ({measure_available}) OR s.warehouse IS NULL OR s.warehouse = '')"
 
 	# An f-string, deliberately: this is interpolated into another f-string, and
 	# a plain string here would leave a literal `{clause}` in the SQL. ruff's
@@ -305,7 +334,7 @@ def get_available_plates(warehouse=None, search=None, limit_start=0, limit_page_
 			s.warehouse,
 			s.custom_weight_kg,
 			b.custom_heat_number,
-			(COALESCE(s.custom_weight_kg, 0) > 0 AND COALESCE(s.warehouse, '') != '') AS can_cut
+			({measure_available} AND COALESCE(s.warehouse, '') != '') AS can_cut
 		{FROM_JOIN}
 			AND i.name IN %(codes)s
 		ORDER BY i.name ASC, s.name ASC
@@ -390,11 +419,7 @@ def get_offcut_stock(search=None, limit_start=0, limit_page_length=20) -> dict:
 	clause = " AND ".join(where)
 	page_length = min(max(int(limit_page_length or 20), 1), MAX_PAGE_LENGTH)
 	start = max(int(limit_start or 0), 0)
-	order_by = (
-		"CASE WHEN s.name = %(q)s THEN 0 ELSE 1 END, p.creation DESC"
-		if search
-		else "p.creation DESC"
-	)
+	order_by = "CASE WHEN s.name = %(q)s THEN 0 ELSE 1 END, p.creation DESC" if search else "p.creation DESC"
 
 	rows = frappe.db.sql(
 		f"""
@@ -513,8 +538,9 @@ def is_weight_managed_item(item_code=None):
 		return False
 
 	from addsol_nl_custom.addsol_nl_custom.plates.grouping import is_weighed_item
+	from addsol_nl_custom.addsol_nl_custom.plates.uom_pricing import shared_pricing
 
-	return bool(is_weighed_item(item_code))
+	return bool(is_weighed_item(item_code)) and not shared_pricing(item_code)
 
 
 @frappe.whitelist(allow_guest=False)

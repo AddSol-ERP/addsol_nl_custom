@@ -44,7 +44,13 @@ def tolerance_pct():
 
 def plate_rows(doc):
 	"""The weighed lines on a purchase document."""
-	return [row for row in doc.get("items", []) if row.get("custom_is_plate")]
+	from addsol_nl_custom.addsol_nl_custom.plates.uom_pricing import shared_pricing
+
+	return [
+		row
+		for row in doc.get("items", [])
+		if row.get("custom_is_plate") and not shared_pricing(row.get("item_code"))
+	]
 
 
 def mark_plate_rows(doc) -> None:
@@ -194,12 +200,16 @@ def update_child_qty_rate(parent_doctype, trans_items, parent_doctype_name, chil
 	if parent_doctype != "Purchase Order" or not is_enabled():
 		return core_update(parent_doctype, trans_items, parent_doctype_name, child_docname)
 
+	from addsol_nl_custom.addsol_nl_custom.plates.uom_pricing import shared_pricing
+
 	items = frappe.parse_json(trans_items) or []
 	requested_rates = [
-		row for row in items
+		row
+		for row in items
 		if frappe.utils.flt(row.get("custom_rate_per_kg")) > 0
 		and row.get("item_code")
 		and is_weighed_item(row.get("item_code"))
+		and not shared_pricing(row.get("item_code"))
 	]
 	if not requested_rates:
 		return core_update(parent_doctype, trans_items, parent_doctype_name, child_docname)
@@ -228,7 +238,8 @@ def update_child_qty_rate(parent_doctype, trans_items, parent_doctype_name, chil
 	for requested in requested_rates:
 		row = next(
 			(
-				child for child in parent.get(child_docname, [])
+				child
+				for child in parent.get(child_docname, [])
 				if requested.get("docname") and child.name == requested.get("docname")
 			),
 			None,
@@ -375,7 +386,9 @@ def copy_rate_from_order(doc, row) -> None:
 		order_rate = frappe.utils.flt(order_row.get("custom_rate_per_kg"))
 		if not order_rate:
 			frappe.throw(
-				_("Row {0} of {1} links to a Purchase Order line with no rate per kg.").format(row.idx, doc.name),
+				_("Row {0} of {1} links to a Purchase Order line with no rate per kg.").format(
+					row.idx, doc.name
+				),
 				title=_("No rate per kg on the order"),
 			)
 		row.custom_rate_per_kg = order_rate
@@ -499,8 +512,9 @@ def pr_before_submit(doc, method=None) -> None:
 		)
 		if abs(allocated - truck_net) > 0.002:
 			frappe.throw(
-				_("The allocated weighbridge weights ({0} Kg) must equal the truck net weight ({1} Kg).")
-				.format(allocated, truck_net),
+				_(
+					"The allocated weighbridge weights ({0} Kg) must equal the truck net weight ({1} Kg)."
+				).format(allocated, truck_net),
 				title=_("Truck weight is not fully allocated"),
 			)
 

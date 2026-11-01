@@ -59,12 +59,14 @@ frappe.ui.form.on("Plate Offcut", {
 		request_estimate(frm);
 	},
 
+	scrap_pricing_qty: function (frm) { request_estimate(frm); },
 	scrap_weight_kg: function (frm) {
 		request_estimate(frm);
 	},
 });
 
 frappe.ui.form.on("Plate Offcut Item", {
+	pricing_qty: function (frm) { request_estimate(frm); },
 	shape: function (frm, cdt, cdn) {
 		// Swapping to a circle leaves the rectangle's length and width in
 		// place rather than wiping them: a second thought about the shape
@@ -126,6 +128,7 @@ function refresh_estimates(frm) {
 		length_mm: row.length_mm,
 		width_mm: row.width_mm,
 		diameter_mm: row.diameter_mm,
+		pricing_qty: row.pricing_qty,
 	}));
 
 	// The reply of an older request must not overwrite a newer one, or the
@@ -139,6 +142,7 @@ function refresh_estimates(frm) {
 			source_serial_no: frm.doc.source_serial_no,
 			rows: rows,
 			scrap_weight_kg: frm.doc.scrap_weight_kg,
+			scrap_pricing_qty: frm.doc.scrap_pricing_qty,
 		},
 		callback: function (r) {
 			if (seq !== estimate_seq) return;
@@ -174,6 +178,7 @@ function apply_estimate(frm, message) {
 			estimate.theoretical_weight_kg
 		);
 		frappe.model.set_value(row.doctype, row.name, "value", estimate.value);
+		if (message.pricing_uom && message.formula_mode !== "Direct Entry") frappe.model.set_value(row.doctype, row.name, "pricing_qty", estimate.pricing_qty);
 	});
 
 	frm.set_value("total_offcut_weight_kg", message.total_offcut_weight_kg);
@@ -190,7 +195,16 @@ function apply_estimate(frm, message) {
 	// so it can never disagree with the weights beside it.
 	frm.set_value("source_plate_text", message.source_plate_text || "");
 
+	if (message.pricing_uom) {
+		["pricing_uom", "source_pricing_qty", "source_cost_per_uom", "total_offcut_pricing_qty", "consumed_pricing_qty"].forEach((field) => frm.set_value(field, message[field]));
+		frm.fields_dict.offcuts.grid.update_docfield_property("pricing_qty", "read_only", message.formula_mode !== "Direct Entry");
+		frm.fields_dict.offcuts.grid.update_docfield_property("pricing_qty", "label", __("Chargeable Qty per Piece") + " (" + message.pricing_uom + ")");
+	}
 	frm.refresh_field("offcuts");
+	if (message.over_by_pricing_qty > 0) {
+		frm.page.set_indicator(__("Offcuts and scrap exceed source quantity"), "red");
+		return;
+	}
 
 	// over_by_kg is already judged against the same tolerance the save uses,
 	// so this lights up exactly when the save would refuse - never a gram

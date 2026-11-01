@@ -19,7 +19,8 @@
   "column_break_result",
   "value",
   "batch_no",
-  "serial_no"
+  "serial_no",
+  "pricing_qty"
  ],
  "fields": [
   {
@@ -123,6 +124,13 @@
    "label": "Serial No",
    "options": "Serial No",
    "read_only": 1
+  },
+  {
+   "fieldname": "pricing_qty",
+   "fieldtype": "Float",
+   "label": "Chargeable Qty per Piece",
+   "read_only": 0,
+   "precision": "6"
   }
  ],
  "index_web_pages_for_search": 1,

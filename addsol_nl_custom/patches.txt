@@ -23,3 +23,5 @@ addsol_nl_custom.patches.v1_0.setup_supplier_quotation_item_layout
 addsol_nl_custom.patches.v1_0.remove_orphaned_custom_field_records
 addsol_nl_custom.patches.v1_0.add_plate_offcut_register
 addsol_nl_custom.patches.v1_0.drop_include_offcuts_filter
+
+addsol_nl_custom.patches.v1_0.add_offcut_uom_metadata

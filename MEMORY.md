@@ -742,3 +742,39 @@ Traps around the fixtures themselves:
   both standard plate reports (the fixture had lost one) and a role profile.
 
 
+
+
+## Per-UOM offcut costing (2026-11-02)
+
+`plates/uom_pricing.py` bridges to `erpnext_ui.uom_pricing`. Configured buying
+items bypass the legacy `custom_rate_per_kg` monetary hooks. Unconfigured items
+and historical serials without a snapshot retain the old Kg path; no historical
+amounts or stock UOMs are rewritten.
+
+New receipts persist their effective UOM, formula, parameters and measured line
+quantity. The receipt stamps a per-stock-unit snapshot on Serial No / Batch.
+Cutting uses the frozen measurement and formula, but reads the serial's current
+ERPNext inventory valuation (including later landed costs) for allocation.
+Pricing quantities are separate from physical Kg. The existing Repack, project
+Material Issue, cancellation, shapes, minimum sizes and serial/batch tracing stay.
+
+For dimensional Formula rules, map parameter `data_source` to
+`custom_length_mm` / `custom_width_mm`; other constants come from the frozen
+Item parameters. Formula cuts calibrate to the source's actual measurement.
+Direct Entry requires a positive chargeable quantity per offcut. Circles need
+an area-based formula mapped to both dimensions (the existing pi/4 shape factor)
+or Direct Entry. This remains the existing one-serialized-piece cutting workflow,
+not a bulk or untracked inventory workflow. Source length and width remain in mm.
+The scrap Item must have a valid conversion for the configured pricing UOM.
+The final offcut takes currency rounding residue on a complete cut.
+
+Deployment requires migrating BOTH apps (ERP UI first) to create transaction
+snapshots, offcut fields and serial/batch metadata. Do not infer historical
+measurements or formulas from today's Item settings: old non-Kg receipts with
+no persisted pricing snapshot require an explicitly verified backfill before
+cutting. Legacy fields are retained for compatibility, not deleted.
+
+Local regression tests: `PYTHONPATH=../../erpnext-ui python3 -m unittest discover
+-s tests -v`. These verify arithmetic only; a development-site bench test of
+receipt -> cutting -> Repack -> Issue -> cancellation is still required before
+production deployment.

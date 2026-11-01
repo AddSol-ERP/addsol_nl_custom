@@ -117,6 +117,7 @@ doctype_js = {
 # sites that migrate. The PO child-row layout is also applied after fixture
 # sync, so fresh installs and migrations both receive it.
 after_sync = [
+	"addsol_nl_custom.patches.v1_0.add_offcut_uom_metadata.execute",
 	"addsol_nl_custom.patches.v1_0.setup_plate_defaults.execute",
 	"addsol_nl_custom.patches.v1_0.setup_finished_goods_group.execute",
 	"addsol_nl_custom.patches.v1_0.setup_purchase_order_item_layout.execute",

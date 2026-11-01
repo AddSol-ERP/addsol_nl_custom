@@ -46,6 +46,11 @@ class PlateOffcut(Document):
 		"""Read the plate being cut and fill in everything derived from it."""
 		details = cutting.get_offcut_details(self.source_serial_no)
 
+		snapshot = details.get("pricing_snapshot")
+		self.source_pricing_snapshot = frappe.as_json(snapshot) if snapshot else None
+		self.pricing_uom = snapshot["pricing_uom"] if snapshot else None
+		self.source_pricing_qty = snapshot["quantity"] if snapshot else 0
+		self.source_cost_per_uom = snapshot["cost_per_uom"] if snapshot else 0
 		self.source_item = details["item"]
 		self.source_plate_text = details["plate_text"]
 		self.source_batch = details["batch"]
@@ -86,22 +91,24 @@ class PlateOffcut(Document):
 		"""
 		if not (self.project or "").strip():
 			frappe.throw(
-				_("Set the Project this plate is cut for. Whatever is neither an offcut nor "
-				  "scrap is issued against it, so a cutting without one has nowhere to put "
-				  "its cost."),
+				_(
+					"Set the Project this plate is cut for. Whatever is neither an offcut nor "
+					"scrap is issued against it, so a cutting without one has nowhere to put "
+					"its cost."
+				),
 				title=_("Project is required"),
 			)
 
 		project_company = frappe.get_cached_value("Project", self.project, "company")
-		warehouse_company = frappe.db.get_value(
-			"Warehouse", self.warehouse, "company", cache=True
-		)
+		warehouse_company = frappe.db.get_value("Warehouse", self.warehouse, "company", cache=True)
 
 		if project_company and warehouse_company and project_company != warehouse_company:
 			frappe.throw(
-				_("Project {0} belongs to Company {1}, but this plate sits in a warehouse of "
-				  "{2}. The piece that is neither offcut nor scrap is issued against the "
-				  "Project, so the two must belong to the same company.").format(
+				_(
+					"Project {0} belongs to Company {1}, but this plate sits in a warehouse of "
+					"{2}. The piece that is neither offcut nor scrap is issued against the "
+					"Project, so the two must belong to the same company."
+				).format(
 					frappe.bold(self.project),
 					frappe.bold(project_company),
 					frappe.bold(warehouse_company),
@@ -132,16 +139,38 @@ class PlateOffcut(Document):
 		# tolerance and fills in the consumed figures both documents show.
 		self.scrap_weight_kg = frappe.utils.flt(self.scrap_weight_kg)
 
+		if self.source_pricing_snapshot:
+			# A measured scrap quantity has one proportional physical weight;
+			# two independently editable scrap budgets could describe two cuts.
+			self.scrap_weight_kg = (
+				self.source_weight_kg * float(self.scrap_pricing_qty or 0) / self.source_pricing_qty
+			)
 		cutting.compute_totals(self)
 
 		if frappe.utils.flt(self.scrap_weight_kg) > 0 and not get_setting("scrap_item"):
 			frappe.throw(
-				_(
-					"This cutting books {0} kg of scrap, but Plate Settings has no scrap Item set."
-				).format(self.scrap_weight_kg),
+				_("This cutting books {0} kg of scrap, but Plate Settings has no scrap Item set.").format(
+					self.scrap_weight_kg
+				),
 				title=_("Scrap Item not set"),
 			)
 
+		if self.source_pricing_snapshot:
+			snapshot = frappe.parse_json(self.source_pricing_snapshot)
+			totals = cutting.pricing_totals(
+				snapshot,
+				[row.pricing_qty for row in self.offcuts],
+				[row.value for row in self.offcuts],
+				self.scrap_pricing_qty,
+			)
+			if totals["over_by_pricing_qty"] > 0.000001:
+				frappe.throw(_("Offcuts and scrap exceed the source chargeable quantity."))
+			for row, value in zip(self.offcuts, totals.pop("allocated_values"), strict=True):
+				row.value = value
+			for field, value in totals.items():
+				setattr(self, field, value)
+			if self.scrap_pricing_qty and not get_setting("scrap_item"):
+				frappe.throw(_("Set the scrap Item in Plate Settings before booking scrap."))
 		self.remainder_weight_kg = self.consumed_weight_kg
 		self.remainder_value = self.consumed_value
 
@@ -158,13 +187,11 @@ class PlateOffcut(Document):
 		for row in self.offcuts:
 			row.offcut_item = cutting.get_or_create_offcut_item(self.source_item, row)
 			if not row.batch_no:
-				row.batch_no = self.make_piece_batch(
-					row.offcut_item, offcut_batch_series, row.weight_kg
-				)
+				row.batch_no = self.make_piece_batch(row.offcut_item, offcut_batch_series, row.weight_kg)
 			if not row.serial_no:
 				row.serial_no = cutting.reserve_serial_no(row.offcut_item)
 
-		if frappe.utils.flt(self.consumed_weight_kg) > 0:
+		if self.has_remainder():
 			self.create_remainder_piece(offcut_batch_series)
 
 		self.make_repack()
@@ -179,6 +206,9 @@ class PlateOffcut(Document):
 
 		self.stamp_piece_serials()
 
+	def has_remainder(self):
+		return (self.consumed_pricing_qty if self.source_pricing_snapshot else self.consumed_weight_kg) > 0
+
 	def create_remainder_piece(self, offcut_batch_series):
 		"""The one piece the order keeps: its own Item, batch and serial.
 
@@ -187,9 +217,7 @@ class PlateOffcut(Document):
 		under one name could not say which heat they came from.
 		"""
 		running_no = cutting.next_remainder_running_no(self.project)
-		self.remainder_item = cutting.get_or_create_remainder_item(
-			self.source_item, self.project, running_no
-		)
+		self.remainder_item = cutting.get_or_create_remainder_item(self.source_item, self.project, running_no)
 		self.remainder_batch_no = self.make_piece_batch(
 			self.remainder_item, offcut_batch_series, self.consumed_weight_kg
 		)
@@ -266,7 +294,7 @@ class PlateOffcut(Document):
 				},
 			)
 
-		if frappe.utils.flt(self.consumed_weight_kg) > 0:
+		if self.has_remainder():
 			# Priced at what it is worth, so the Material Issue that follows
 			# takes exactly this value out of stock and onto the Project.
 			stock_entry.append(
@@ -284,17 +312,24 @@ class PlateOffcut(Document):
 				},
 			)
 
-		if frappe.utils.flt(self.scrap_weight_kg) > 0:
+		scrap_qty = self.scrap_pricing_qty if self.source_pricing_snapshot else self.scrap_weight_kg
+		if frappe.utils.flt(scrap_qty) > 0:
+			from erpnext.stock.get_item_details import get_conversion_factor
+
+			scrap_uom = self.pricing_uom if self.source_pricing_snapshot else "Kg"
+			conversion = get_conversion_factor(get_setting("scrap_item"), scrap_uom).get("conversion_factor")
+			if not conversion:
+				frappe.throw(_("Configure the scrap Item conversion for UOM {0}.").format(scrap_uom))
 			stock_entry.append(
 				"items",
 				{
 					"t_warehouse": self.warehouse,
 					"item_code": get_setting("scrap_item"),
-					"qty": self.scrap_weight_kg,
-					"uom": "Kg",
-					"conversion_factor": 1,
+					"qty": scrap_qty,
+					"uom": scrap_uom,
+					"conversion_factor": conversion,
 					"set_basic_rate_manually": 1,
-					"basic_rate": self.source_cost_per_kg,
+					"basic_rate": self.scrap_value / (scrap_qty * conversion),
 					"basic_amount": self.scrap_value,
 				},
 			)
@@ -313,7 +348,7 @@ class PlateOffcut(Document):
 		expense account comes from the Item's own defaults, so the order
 		carries the plate's cost without this code touching the ledger.
 		"""
-		if frappe.utils.flt(self.consumed_weight_kg) <= 0:
+		if not self.has_remainder():
 			return
 
 		stock_entry = self.new_stock_entry("Material Issue")
@@ -341,9 +376,9 @@ class PlateOffcut(Document):
 		company = frappe.db.get_value("Warehouse", self.warehouse, "company", cache=True)
 		if not company:
 			frappe.throw(
-				_("Warehouse {0} does not belong to any company, so no Stock Entry can be made from it.").format(
-					self.warehouse
-				),
+				_(
+					"Warehouse {0} does not belong to any company, so no Stock Entry can be made from it."
+				).format(self.warehouse),
 				title=_("Warehouse has no company"),
 			)
 
@@ -365,6 +400,42 @@ class PlateOffcut(Document):
 
 		for row in self.offcuts:
 			self.stamp_serial(self.source_serial_no, row.serial_no, row.weight_kg)
+		if self.source_pricing_snapshot:
+			from addsol_nl_custom.addsol_nl_custom.plates.uom_pricing import stamp_snapshot
+
+			source = frappe.parse_json(self.source_pricing_snapshot)
+			for row in self.offcuts:
+				snapshot = {
+					**source,
+					"quantity": row.pricing_qty,
+					"cost_per_uom": row.value / row.pricing_qty,
+				}
+				params = dict(source.get("params_by_symbol") or {})
+				for parameter in source["rule"].get("params") or []:
+					field = parameter.get("data_source")
+					if field in ("custom_length_mm", "custom_width_mm"):
+						params[parameter["symbol"]] = (
+							row.diameter_mm
+							if cutting.is_circle(row)
+							else row.get(field.removeprefix("custom_"))
+						)
+				snapshot["params_by_symbol"] = params
+				for doctype, name in (("Serial No", row.serial_no), ("Batch", row.batch_no)):
+					stamp_snapshot(doctype, name, snapshot)
+			if self.has_remainder():
+				# Irregular remainder has no declared rectangular dimensions. It
+				# can be measured later using Direct Entry, never a guessed size.
+				snapshot = {
+					**source,
+					"quantity": self.consumed_pricing_qty,
+					"cost_per_uom": self.consumed_value / self.consumed_pricing_qty,
+					"rule": {**source["rule"], "formula_mode": "Direct Entry"},
+				}
+				for doctype, name in (
+					("Serial No", self.remainder_serial_no),
+					("Batch", self.remainder_batch_no),
+				):
+					stamp_snapshot(doctype, name, snapshot)
 
 	@staticmethod
 	def stamp_serial(source_serial_no, serial_no, weight_kg) -> None:

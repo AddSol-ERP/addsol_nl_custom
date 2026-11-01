@@ -105,7 +105,10 @@ def get_source_details(source_serial_no) -> dict:
 	if serial.status != "Active":
 		frappe.throw(_("Serial No {0} is {1}, so it cannot be cut.").format(source_serial_no, serial.status))
 
-	if not serial.custom_weight_kg:
+	from addsol_nl_custom.addsol_nl_custom.plates.uom_pricing import read_snapshot
+
+	snapshot = read_snapshot(source_serial_no)
+	if not serial.custom_weight_kg and not snapshot:
 		frappe.throw(
 			_("Serial No {0} has no weight on it. It was received before weights were recorded.").format(
 				source_serial_no
@@ -125,8 +128,9 @@ def get_source_details(source_serial_no) -> dict:
 			],
 			as_dict=True,
 		)
-		or frappe._dict()
-	)
+		if serial.batch_no
+		else frappe._dict()
+	) or frappe._dict()
 
 	item = (
 		frappe.db.get_value(
@@ -135,7 +139,29 @@ def get_source_details(source_serial_no) -> dict:
 		or frappe._dict()
 	)
 
+	if snapshot and serial.warehouse:
+		from erpnext.stock.utils import get_incoming_rate
+		from frappe.utils import nowdate, nowtime
+
+		# Use today's serial valuation, including later landed costs, rather
+		# than treating the purchase price snapshot as a second stock ledger.
+		value = get_incoming_rate(
+			{
+				"item_code": serial.item_code,
+				"warehouse": serial.warehouse,
+				"serial_no": source_serial_no,
+				"batch_no": serial.batch_no,
+				"qty": -1,
+				"posting_date": nowdate(),
+				"posting_time": nowtime(),
+			},
+			fallbacks=False,
+		)
+		if value is None or not math.isfinite(value) or value < 0:
+			raise ValueError("Cannot determine the source serial's inventory value.")
+		snapshot = {**snapshot, "cost_per_uom": value / snapshot["quantity"]}
 	return {
+		"pricing_snapshot": snapshot,
 		"item": serial.item_code,
 		"plate_text": plate_text_for(item.item_name, serial.item_code, serial.batch_no),
 		"batch": serial.batch_no,
@@ -269,8 +295,9 @@ def check_min_size(row, details, cut_text) -> None:
 		diameter = frappe.utils.flt(row.diameter_mm)
 		too_small = (min_length and diameter < min_length) or (min_width and diameter < min_width)
 	else:
-		longer, shorter = max(frappe.utils.flt(row.length_mm), frappe.utils.flt(row.width_mm)), min(
-			frappe.utils.flt(row.length_mm), frappe.utils.flt(row.width_mm)
+		longer, shorter = (
+			max(frappe.utils.flt(row.length_mm), frappe.utils.flt(row.width_mm)),
+			min(frappe.utils.flt(row.length_mm), frappe.utils.flt(row.width_mm)),
 		)
 		too_small = (min_width and shorter < min_width) or (min_length and longer < min_length)
 
@@ -298,6 +325,23 @@ def fits(offcut_length, offcut_width, plate_length, plate_width) -> bool:
 
 def compute_offcut(row, details) -> None:
 	"""The offcut's weight and value, derived from the source lot."""
+	snapshot = details.get("pricing_snapshot")
+	if snapshot:
+		from addsol_nl_custom.addsol_nl_custom.plates.uom_pricing import piece_quantity
+
+		row.pricing_qty = round_half_up(piece_quantity(snapshot, row, details), 6)
+		row.value = round_half_up(row.pricing_qty * snapshot["cost_per_uom"], 2)
+		# Physical Kg stays distinct from the chargeable quantity. Non-weight
+		# materials need no legacy density formula just to calculate their cost.
+		length = row.get("diameter_mm") if is_circle(row) else row.get("length_mm")
+		width = row.get("diameter_mm") if is_circle(row) else row.get("width_mm")
+		area = float(length) * float(width) * (CIRCLE_AREA_FACTOR if is_circle(row) else 1)
+		source_area = details["length_mm"] * details["width_mm"]
+		row.weight_kg = (
+			round_half_up(details["weight"] * area / source_area, WEIGHT_PRECISION) if source_area else 0
+		)
+		row.theoretical_weight_kg = row.weight_kg
+		return
 	theoretical = theoretical_offcut_weight(row, details)
 
 	row.theoretical_weight_kg = round_half_up(theoretical, WEIGHT_PRECISION)
@@ -349,20 +393,14 @@ def offcut_totals(source_weight_kg, scrap_weight_kg, row_weights, row_values, co
 	offcuts = sum(frappe.utils.flt(weight) for weight in row_weights)
 	source = frappe.utils.flt(source_weight_kg)
 	consumed = source - offcuts - scrap
-	over_by = (
-		0.0
-		if consumed >= -OVERAGE_TOLERANCE
-		else round_half_up(-consumed, WEIGHT_PRECISION)
-	)
+	over_by = 0.0 if consumed >= -OVERAGE_TOLERANCE else round_half_up(-consumed, WEIGHT_PRECISION)
 	cost_per_kg = frappe.utils.flt(cost_per_kg)
 
 	return {
 		"source_weight_kg": source,
 		"scrap_weight_kg": scrap,
 		"total_offcut_weight_kg": round_half_up(offcuts, WEIGHT_PRECISION),
-		"total_offcut_value": round_half_up(
-			sum(frappe.utils.flt(value) for value in row_values), 2
-		),
+		"total_offcut_value": round_half_up(sum(frappe.utils.flt(value) for value in row_values), 2),
 		"scrap_value": round_half_up(scrap * cost_per_kg, 2),
 		"consumed": consumed,
 		# Below zero only within the tolerance - a cutting a gram over is
@@ -377,8 +415,10 @@ def compute_totals(doc) -> None:
 	"""Offcuts plus scrap can never come to more than the plate weighed."""
 	if frappe.utils.flt(doc.scrap_weight_kg) < 0:
 		frappe.throw(
-			_("Scrap cannot be negative. Scrap is what you book as waste; the rest of the "
-			  "plate becomes the remainder piece."),
+			_(
+				"Scrap cannot be negative. Scrap is what you book as waste; the rest of the "
+				"plate becomes the remainder piece."
+			),
 			title=_("Scrap cannot be negative"),
 		)
 
@@ -439,6 +479,12 @@ def get_or_create_offcut_item(source_item, row) -> str:
 		}
 
 	if frappe.db.exists("Item", name):
+		existing = frappe.get_doc("Item", name)
+		stock_uom = frappe.db.get_value("Item", source_item, "stock_uom")
+		if existing.stock_uom != stock_uom or not existing.has_serial_no or not existing.has_batch_no:
+			frappe.throw(
+				_("Existing offcut Item {0} has incompatible stock UOM or tracking settings.").format(name)
+			)
 		return name
 
 	item.update(
@@ -447,7 +493,9 @@ def get_or_create_offcut_item(source_item, row) -> str:
 			"item_code": name,
 			"item_name": name,
 			"item_group": item_group,
-			"custom_thickness_dropdown": frappe.db.get_value("Item", source_item, "custom_thickness_dropdown"),
+			"custom_thickness_dropdown": frappe.db.get_value(
+				"Item", source_item, "custom_thickness_dropdown"
+			),
 			"custom_is_offcut": 1,
 			"custom_source_item": source_item,
 		}
@@ -486,7 +534,9 @@ def get_or_create_remainder_item(source_item, project, running_no) -> str:
 			"item_code": name,
 			"item_name": name,
 			"item_group": item_group,
-			"custom_thickness_dropdown": frappe.db.get_value("Item", source_item, "custom_thickness_dropdown"),
+			"custom_thickness_dropdown": frappe.db.get_value(
+				"Item", source_item, "custom_thickness_dropdown"
+			),
 			# Leftover of a plate, not an offcut: it stays regular plate stock,
 			# so the Plate Stock Register must not file it under offcuts.
 			"custom_is_remainder": 1,
@@ -541,6 +591,25 @@ def insert_piece_item(item: dict, item_group) -> str:
 	if hsn_code:
 		item["gst_hsn_code"] = hsn_code
 
+	source = frappe.get_doc("Item", item.get("custom_source_item"))
+	for field in (
+		"stock_uom",
+		"has_serial_no",
+		"has_batch_no",
+		"create_new_batch",
+		"valuation_method",
+		"is_stock_item",
+	):
+		item[field] = source.get(field)
+	# Preserve the explicit item override and parameter table on new shapes.
+	if source.get("custom_uom_pricing_rule"):
+		item["custom_uom_pricing_rule"] = source.custom_uom_pricing_rule
+	if source.get("custom_uom_pricing_parameters"):
+		item["custom_uom_pricing_parameters"] = [
+			{key: row.get(key) for key in ("rule", "symbol", "value")}
+			for row in source.custom_uom_pricing_parameters
+		]
+	item.update({"has_serial_no": 1, "has_batch_no": 1, "create_new_batch": 1})
 	created = frappe.get_doc(item).insert(ignore_permissions=True)
 
 	for field, group_field in SERIES_FIELDS.items():
@@ -564,3 +633,39 @@ def reserve_serial_no(item_code) -> str:
 		name = make_autoname(series, doc=doc)
 		if not frappe.db.exists("Serial No", name):
 			return name
+
+
+def pricing_totals(snapshot, quantities, values, scrap_qty):
+	"""Balance measured units and booked values without mixing them with Kg."""
+	from addsol_nl_custom.addsol_nl_custom.plates.uom_pricing import positive
+
+	source = positive(snapshot["quantity"], "Source chargeable quantity missing.")
+	scrap = float(scrap_qty or 0)
+	if not math.isfinite(scrap) or scrap < 0:
+		raise ValueError("Scrap chargeable quantity must be non-negative and finite.")
+	remainder = source - sum(quantities) - scrap
+	over_by = max(round_half_up(-remainder, 6), 0)
+	scrap_value = round_half_up(scrap * snapshot["cost_per_uom"], 2)
+	# Assign rounding residue to the remainder to preserve total inventory value.
+	values = list(values)
+	remaining_value = round_half_up(source * snapshot["cost_per_uom"] - sum(values) - scrap_value, 2)
+	if abs(remainder) <= 0.000001 and values:
+		# With no remainder row, assign the currency rounding residue to the
+		# final offcut rather than losing value at a complete cut.
+		values[-1] = round_half_up(values[-1] + remaining_value, 2)
+		remaining_value = 0
+	if any(value < 0 or not math.isfinite(value) for value in values):
+		raise ValueError("Offcut inventory values must be non-negative and finite.")
+
+	return {
+		"allocated_values": values,
+		"over_by_pricing_qty": over_by,
+		"source_pricing_qty": source,
+		"pricing_uom": snapshot["pricing_uom"],
+		"total_offcut_pricing_qty": round_half_up(sum(quantities), 6),
+		"consumed_pricing_qty": max(round_half_up(remainder, 6), 0),
+		"scrap_pricing_qty": scrap,
+		"scrap_value": scrap_value,
+		"consumed_value": max(remaining_value, 0),
+		"total_offcut_value": round_half_up(sum(values), 2),
+	}

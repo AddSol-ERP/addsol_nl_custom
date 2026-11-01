@@ -44,7 +44,14 @@
   "stock_entry",
   "custom_document_attachments",
   "material_issue",
-  "amended_from"
+  "amended_from",
+  "pricing_uom",
+  "source_pricing_qty",
+  "source_cost_per_uom",
+  "scrap_pricing_qty",
+  "total_offcut_pricing_qty",
+  "consumed_pricing_qty",
+  "source_pricing_snapshot"
  ],
  "fields": [
   {
@@ -323,6 +330,54 @@
    "options": "Plate Offcut",
    "print_hide": 1,
    "read_only": 1
+  },
+  {
+   "fieldname": "pricing_uom",
+   "fieldtype": "Link",
+   "label": "Pricing UOM",
+   "read_only": 1,
+   "options": "UOM"
+  },
+  {
+   "fieldname": "source_pricing_qty",
+   "fieldtype": "Float",
+   "label": "Source Chargeable Qty",
+   "read_only": 1,
+   "precision": "6"
+  },
+  {
+   "fieldname": "source_cost_per_uom",
+   "fieldtype": "Currency",
+   "label": "Source Cost per Pricing UOM",
+   "read_only": 1
+  },
+  {
+   "fieldname": "scrap_pricing_qty",
+   "fieldtype": "Float",
+   "label": "Scrap Chargeable Qty",
+   "read_only": 0,
+   "precision": "6"
+  },
+  {
+   "fieldname": "total_offcut_pricing_qty",
+   "fieldtype": "Float",
+   "label": "Total Offcut Chargeable Qty",
+   "read_only": 1,
+   "precision": "6"
+  },
+  {
+   "fieldname": "consumed_pricing_qty",
+   "fieldtype": "Float",
+   "label": "Consumed Chargeable Qty",
+   "read_only": 1,
+   "precision": "6"
+  },
+  {
+   "fieldname": "source_pricing_snapshot",
+   "fieldtype": "Long Text",
+   "label": "Source Pricing Snapshot",
+   "read_only": 1,
+   "hidden": 1
   }
  ],
  "index_web_pages_for_search": 1,
