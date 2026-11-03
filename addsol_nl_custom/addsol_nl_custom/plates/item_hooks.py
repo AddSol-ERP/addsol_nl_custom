@@ -7,6 +7,7 @@ from frappe import _
 from addsol_nl_custom.addsol_nl_custom.finished_goods.groups import is_finished_good_group
 from addsol_nl_custom.addsol_nl_custom.plates.grouping import is_weighed_group
 from addsol_nl_custom.addsol_nl_custom.plates.item_defaults import apply_plate_item_defaults
+from addsol_nl_custom.addsol_nl_custom.plates.uom_pricing import uses_configured_item_code
 from addsol_nl_custom.addsol_nl_custom.plates.utils import build_plate_description, build_plate_item_name
 from addsol_nl_custom.addsol_nl_custom.plates.weight import compute_theoretical_weight, get_item_thickness_mm
 
@@ -22,6 +23,9 @@ def item_autoname(doc, method):
 	remainder has no size at all. Renaming either would orphan the stock,
 	batch and serial that point at the old name.
 	"""
+	if uses_configured_item_code(doc):
+		return
+
 	if is_cutting_generated(doc):
 		# cutting.py named it and set item_name alongside; the link has to
 		# agree with the name, exactly as the plate branch below keeps them.
@@ -100,20 +104,21 @@ def item_validate(doc, method):
 
 	expected_name = build_plate_item_name(doc.item_group, thickness_mm, length_mm, width_mm)
 
-	if doc.get("__islocal"):
-		doc.name = expected_name
-		doc.item_code = expected_name
-	else:
-		if doc.name != expected_name:
-			frappe.msgprint(
-				f"Item name is {doc.name} but its dimensions give {expected_name}. "
-				"The name is not changed on save.",
-				alert=True,
-			)
+	# Shared naming changes identity only; plate weights/defaults still apply.
+	if not uses_configured_item_code(doc):
+		if doc.get("__islocal"):
+			doc.name = expected_name
+			doc.item_code = expected_name
+		else:
+			if doc.name != expected_name:
+				frappe.msgprint(
+					f"Item name is {doc.name} but its dimensions give {expected_name}. "
+					"The name is not changed on save.",
+					alert=True,
+				)
 
-	if doc.item_name != expected_name:
-		doc.item_name = expected_name
-
+		if doc.item_name != expected_name:
+			doc.item_name = expected_name
 	if doc.description == "*New*" or not doc.description:
 		doc.description = build_plate_description(thickness_mm, length_mm, width_mm)
 

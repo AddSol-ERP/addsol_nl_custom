@@ -17,6 +17,7 @@ import frappe
 from frappe import _
 
 from addsol_nl_custom.addsol_nl_custom.finished_goods import groups, naming
+from addsol_nl_custom.addsol_nl_custom.plates.uom_pricing import uses_configured_item_code
 
 # Where the minted code is kept between the autoname stage and the validate
 # stage. A flag, not a field: it is never written to the database.
@@ -25,6 +26,8 @@ CODE_FLAG = "finished_good_code"
 
 def item_autoname(doc, method):
 	"""Give a finished good its code, built from its Project."""
+	if uses_configured_item_code(doc):
+		return
 	known = groups.finished_good_groups()
 	if not groups.is_finished_good_group(doc.get("item_group"), known):
 		return
@@ -71,6 +74,8 @@ def item_validate(doc, method):
 	it. A name set here is therefore the name the Item is stored under, which
 	is why the code is asserted again here and not only in the autoname stage.
 	"""
+	if uses_configured_item_code(doc):
+		return
 	known = groups.finished_good_groups()
 	if not groups.is_finished_good_group(doc.get("item_group"), known):
 		return

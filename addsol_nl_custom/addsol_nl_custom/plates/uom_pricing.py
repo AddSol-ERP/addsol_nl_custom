@@ -118,3 +118,15 @@ def positive(value, message):
 	if not math.isfinite(number) or number <= 0:
 		raise ValueError(message)
 	return number
+
+
+def uses_configured_item_code(doc):
+	"""An explicitly enabled shared naming rule takes over customer naming."""
+	if "erpnext_ui" not in frappe.get_installed_apps():
+		return False
+	try:
+		from erpnext_ui.item_naming import uses_configured_item_code as configured
+	except ImportError:
+		# Compatibility while the UI app is upgraded independently.
+		return False
+	return configured(doc)

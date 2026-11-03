@@ -778,3 +778,14 @@ Local regression tests: `PYTHONPATH=../../erpnext-ui python3 -m unittest discove
 -s tests -v`. These verify arithmetic only; a development-site bench test of
 receipt -> cutting -> Repack -> Issue -> cancellation is still required before
 production deployment.
+
+## Shared configurable Item codes (2026-11-03)
+
+ERP UI's optional **UI Item Code Rule** now owns naming for explicitly enabled
+Item Groups. `plates.uom_pricing.uses_configured_item_code` checks the shared
+configuration, while tolerating an absent/older UI app. Plate and finished-goods
+naming hooks stand down only for configured Items. Plate validation still runs
+weight and stock-default logic; it skips its legacy name/name-display rewrite.
+Imports and cutting-generated Items remain under their existing naming flows.
+Deploy ERP UI's `item_naming.py` and migrate its new DocType before enabling a
+rule. Tests: `PYTHONPATH=../../erpnext-ui python3 -m unittest discover -s tests -v`.
