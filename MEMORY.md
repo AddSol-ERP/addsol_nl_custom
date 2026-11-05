@@ -800,3 +800,11 @@ URLs too. The public resolver follows source serials only for supplier context;
 it never publishes the cutting document, costs or stock balance.
 Local customer-app tests: 13 passed; touched Python lint passed. Live QR camera
 and guest-page verification remain pending.
+
+### QR implementation belongs to ERP UI
+
+Offcut register now delegates to `erpnext_ui.item_qr.label_qr_svg_base64` with
+only the serial locator. Customer app no longer constructs URLs, signs links
+or renders QR SVGs. Without ERP UI installed it returns an empty QR value so
+stock registration remains usable. Matching ERP UI deployment is required for
+labels. Public preview and authenticated scanning both remain in ERP UI.

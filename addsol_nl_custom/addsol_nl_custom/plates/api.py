@@ -3,9 +3,6 @@
 
 """Whitelisted helpers the desk forms call."""
 
-from base64 import b64encode
-from io import BytesIO
-from urllib.parse import quote
 
 import frappe
 from frappe import _
@@ -460,8 +457,6 @@ def get_offcut_stock(search=None, limit_start=0, limit_page_length=20) -> dict:
 		values,
 	)[0][0]
 
-	base_url = frappe.utils.get_url()
-
 	pieces = [
 		{
 			"serial": row.serial,
@@ -479,7 +474,7 @@ def get_offcut_stock(search=None, limit_start=0, limit_page_length=20) -> dict:
 			"width_mm": frappe.utils.flt(row.width_mm),
 			# The Plate Offcut that produced it, so a click can open the job.
 			"offcut": row.offcut,
-			"qr_svg_base64": _offcut_qr_svg_base64(base_url, row.serial, row.offcut),
+			"qr_svg_base64": _offcut_qr_svg_base64(row.serial),
 		}
 		for row in rows
 	]
@@ -487,22 +482,13 @@ def get_offcut_stock(search=None, limit_start=0, limit_page_length=20) -> dict:
 	return {"pieces": pieces, "total": int(total)}
 
 
-def _offcut_qr_svg_base64(base_url: str, serial: str, offcut_name: str) -> str:
-	"""Create a QR label that opens this registered offcut in the UI."""
-	import pyqrcode
+def _offcut_qr_svg_base64(serial: str) -> str:
+	"""Supply the offcut identity to ERP UI's shared label system."""
+	if "erpnext_ui" not in frappe.get_installed_apps():
+		return ""
+	from erpnext_ui.item_qr import label_qr_svg_base64
 
-	url = (
-		f"{base_url}/addsol_ui#/store/plate-offcut/{quote(offcut_name, safe='')}"
-		f"?serial={quote(serial, safe='')}"
-	)
-	if "erpnext_ui" in frappe.get_installed_apps():
-		from erpnext_ui.item_qr import public_label_url
-
-		url = public_label_url({"kind": "serial", "serial": serial})
-	qr = pyqrcode.create(url)
-	buffer = BytesIO()
-	qr.svg(buffer, scale=5, quiet_zone=2)
-	return b64encode(buffer.getvalue()).decode("ascii")
+	return label_qr_svg_base64({"kind": "serial", "serial": serial})
 
 
 def line_is_drawn(line) -> bool:
