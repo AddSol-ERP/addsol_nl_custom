@@ -495,6 +495,10 @@ def _offcut_qr_svg_base64(base_url: str, serial: str, offcut_name: str) -> str:
 		f"{base_url}/addsol_ui#/store/plate-offcut/{quote(offcut_name, safe='')}"
 		f"?serial={quote(serial, safe='')}"
 	)
+	if "erpnext_ui" in frappe.get_installed_apps():
+		from erpnext_ui.item_qr import public_label_url
+
+		url = public_label_url({"kind": "serial", "serial": serial})
 	qr = pyqrcode.create(url)
 	buffer = BytesIO()
 	qr.svg(buffer, scale=5, quiet_zone=2)

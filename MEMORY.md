@@ -789,3 +789,14 @@ weight and stock-default logic; it skips its legacy name/name-display rewrite.
 Imports and cutting-generated Items remain under their existing naming flows.
 Deploy ERP UI's `item_naming.py` and migrate its new DocType before enabling a
 rule. Tests: `PYTHONPATH=../../erpnext-ui python3 -m unittest discover -s tests -v`.
+
+## Offcut public QR links (2026-11-05)
+
+`_offcut_qr_svg_base64` uses ERP UI's signed `public_label_url` when that app is
+installed, so new offcut labels open a guest read-only Item preview. Deploy the
+matching ERP UI `item_qr.py` before this change. Sites without ERP UI retain their
+existing internal QR URL. ERP UI's authenticated scanner recognizes old offcut
+URLs too. The public resolver follows source serials only for supplier context;
+it never publishes the cutting document, costs or stock balance.
+Local customer-app tests: 13 passed; touched Python lint passed. Live QR camera
+and guest-page verification remain pending.
