@@ -836,3 +836,13 @@ current Item geometry for historical prints. Internal migration calibration F is
 not displayed. ERP UI also persists `custom_pricing_dimensions` for builder columns;
 its new patch backfills existing snapshots. Deploy/migrate ERP UI before importing
 the NL print fixtures. Parameters without a saved unit do not get a guessed unit.
+
+## Missing legacy serial weight recovery (2026-11-09)
+
+Legacy migration may recover a missing whole-plate Serial.custom_weight_kg from
+one submitted, non-return PR whose bundle explicitly contains the serial and
+matching batch. Verify all stock units are unique quantity-1 serial entries, and
+reconcile historical Kg weight/rate/amount. Allocate accepted receipt total over
+stock_qty, never Item theoretical weight. Report allocations with source IDs in
+`recovered_serial_weights`. Exclude cutting-generated offcuts/remainders. Existing
+serial weights/snapshots are not replaced; unresolved active stock still blocks.

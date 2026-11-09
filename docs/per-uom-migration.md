@@ -52,3 +52,13 @@ builder display from existing snapshots; the NL retirement migration fills it fo
 converted rows. Missing historical units are left unspecified, never inferred
 from today's Item or pricing rule. New snapshots retain Item parameter unit
 overrides. ERP UI must be migrated before these print fixtures are imported.
+
+Missing whole-plate serial weights can be recovered from one verified submitted
+Purchase Receipt bundle. Every stock unit must have a distinct matching serial
+entry with quantity 1, and the historical Kg rate/amount must reconcile. The
+receipt's accepted line weight is allocated over its stock quantity, matching
+receipt stamping; this is not an individual physical measurement. The preview
+reports `recovered_serial_weights` with receipt and row identifiers. Only absent
+serial weights are repaired; existing weights/snapshots, stock quantities and
+accounting amounts remain unchanged. Offcuts/remainders, ambiguous receipts,
+returns, mismatched bundles and missing source records still require review.

@@ -75,7 +75,64 @@ class MigrationTests(unittest.TestCase):
 		with patch.object(migration, "frappe", fake, create=True):
 			report = migration.run()
 			self.assertEqual(len(report["conflicts"]), 1)
-			with self.assertRaisesRegex(ValueError, "no data changed"):
+			with self.assertRaisesRegex(ValueError, "no data changed") as raised:
 				migration.run(dry_run=False)
+			self.assertIn("Purchase Order Item ROW-1 (PO-1)", str(raised.exception).splitlines()[0])
 		fake.db.set_value.assert_not_called()
 		fake.db.set_single_value.assert_not_called()
+
+	def test_missing_measurement_reports_specific_field_without_guessing(self):
+		row = self.row()
+		row.update(amount=0, custom_billable_weight_kg=0, custom_est_weight_kg=0)
+		with self.assertRaisesRegex(ValueError, "Chargeable Kg.*found 0"):
+			migration.row_conversion(row, {"weight_per_unit": 30})
+
+	def test_zero_quantity_reports_specific_field(self):
+		row = self.row()
+		row["qty"] = 0
+		with self.assertRaisesRegex(ValueError, "Document quantity.*found 0"):
+			migration.row_conversion(row, {})
+
+	def recovery_fixture(self):
+		serial = dict(name="PL-000095", item_code="PLATE", batch_no="PLB-26-00003")
+		receipt = dict(
+			docstatus=1,
+			item_code="PLATE",
+			qty=40,
+			stock_qty=40,
+			amount=52080000,
+			custom_rate_per_kg=2800,
+			custom_billable_weight_kg=18600,
+			custom_est_weight_kg=18000,
+		)
+		entries = [dict(serial_no=f"PL-{n:06d}", batch_no="PLB-26-00003", qty=1) for n in range(57, 97)]
+		return serial, receipt, entries
+
+	def test_recovers_verified_receipt_allocation_without_changing_receipt(self):
+		serial, receipt, entries = self.recovery_fixture()
+		original = receipt.copy()
+		self.assertEqual(migration.receipt_bundle_weight(serial, receipt, entries), 465)
+		self.assertEqual(receipt, original)
+
+	def test_recovery_rejects_incomplete_duplicate_or_wrong_batch_bundle(self):
+		serial, receipt, entries = self.recovery_fixture()
+		for bad in (
+			entries[:-1],
+			[*entries[:-1], entries[0]],
+			[{**entry, "batch_no": "OTHER"} for entry in entries],
+			[{**entry, "qty": -1} for entry in entries],
+		):
+			with self.subTest(bad=bad[0]), self.assertRaises(ValueError):
+				migration.receipt_bundle_weight(serial, receipt, bad)
+
+	def test_recovery_rejects_unsubmitted_or_different_item_receipt(self):
+		serial, receipt, entries = self.recovery_fixture()
+		for changes in (dict(docstatus=0), dict(docstatus=2), dict(item_code="OTHER")):
+			with self.assertRaises(ValueError):
+				migration.receipt_bundle_weight(serial, {**receipt, **changes}, entries)
+
+	def test_recovery_checks_money_and_never_uses_theoretical_weight(self):
+		serial, receipt, entries = self.recovery_fixture()
+		for changes in (dict(amount=1), dict(amount=0, custom_billable_weight_kg=0)):
+			with self.assertRaises(ValueError):
+				migration.receipt_bundle_weight(serial, {**receipt, **changes}, entries)
