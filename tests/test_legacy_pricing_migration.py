@@ -155,3 +155,18 @@ class MigrationTests(unittest.TestCase):
 				migration.validate_rejected_bundle(serial, receipt, bad)
 		with self.assertRaisesRegex(ValueError, "subsequent movements"):
 			migration.validate_rejected_bundle({**serial, "warehouse": "Production"}, receipt, entries)
+
+	def test_direct_entry_numeric_columns_are_not_null_but_snapshot_has_no_estimate(self):
+		result = migration.row_conversion(self.row(), {})
+		self.assertEqual(result["custom_estimated_chargeable_qty"], 0)
+		self.assertEqual(result["custom_estimated_pricing_amount"], 0)
+		snapshot = json.loads(result["custom_pricing_snapshot"])
+		self.assertIsNone(snapshot["calculated_chargeable_qty"])
+		self.assertIsNone(snapshot["baseline_per_unit"])
+		self.assertEqual(result["custom_chargeable_qty"], 300)
+		self.assertEqual(result["custom_rate_per_pricing_uom"], 40)
+
+	def test_formula_estimate_columns_keep_computed_values(self):
+		result = migration.row_conversion(self.row(), {"custom_length_mm": 2000, "custom_width_mm": 1000})
+		self.assertEqual(result["custom_estimated_chargeable_qty"], 300)
+		self.assertEqual(result["custom_estimated_pricing_amount"], 12000)

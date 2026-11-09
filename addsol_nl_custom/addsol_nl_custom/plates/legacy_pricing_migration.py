@@ -105,10 +105,12 @@ def row_conversion(row, item):
 		"custom_rate_per_pricing_uom": rate,
 		"custom_chargeable_qty": measured,
 		"custom_pricing_snapshot": json.dumps(snapshot),
-		"custom_estimated_chargeable_qty": snapshot["calculated_chargeable_qty"],
+		# Frappe numeric columns may be NOT NULL. The JSON snapshot retains
+		# None for Direct Entry; zero is only the empty numeric display value.
+		"custom_estimated_chargeable_qty": snapshot["calculated_chargeable_qty"] or 0,
 		"custom_estimated_pricing_amount": (snapshot["calculated_chargeable_qty"] * rate)
 		if snapshot["calculated_chargeable_qty"] is not None
-		else None,
+		else 0,
 	}
 
 

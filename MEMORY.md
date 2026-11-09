@@ -854,3 +854,8 @@ Report them separately in `rejected_serials_without_weight` and leave their weig
 valuation and snapshot untouched; they do not block paid-stock migration. Missing
 or ambiguous source links and later movements still require review. This handles
 50 accepted + 5 rejected serials without allocating the 50-unit paid weight to 55.
+
+Direct Entry migration estimates must write numeric zero to the two generic
+estimate display columns: Frappe/MariaDB may define them NOT NULL. Keep JSON
+`calculated_chargeable_qty` and `baseline_per_unit` null so prints/UI still know
+there is no formula estimate. Actual chargeable quantities and rates are unchanged.
