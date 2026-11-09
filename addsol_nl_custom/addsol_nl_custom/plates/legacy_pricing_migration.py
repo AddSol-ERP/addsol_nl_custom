@@ -17,6 +17,10 @@ PARENTS = {
 	"Purchase Invoice Item": "Purchase Invoice",
 }
 ARCHIVED_FIELDS = {
+	"custom_plate_details_section",
+	"custom_plate_weight_column_break",
+	"custom_unit_weight_kg",
+	"custom_weight_per_plate_kg",
 	"custom_rate_per_kg",
 	"custom_est_weight_kg",
 	"custom_supplier_weight_kg",

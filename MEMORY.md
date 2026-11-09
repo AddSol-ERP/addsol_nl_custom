@@ -880,3 +880,13 @@ rules retain their configured display order.
 Legacy dimension text now omits parameter symbols, retaining T/L/W value order,
 e.g. `10 mm × 3000 mm × 1500 mm`. `refresh_legacy_dimension_values` reapplies
 print-only repair on already-migrated sites. No financial or cutting data changes.
+
+## Hide retired Desk plate pricing controls (2026-11-09)
+
+`hide_legacy_plate_details` hides the retired Plate Details section/column and
+old per-plate/per-Kg purchasing controls on SQ/PO/PR/PI parents and item rows.
+Fields remain stored for historical migration/audit. Generator applies the same
+flags so fixture sync cannot restore them. Patch also runs after_sync and
+ after_migrate. Scope is buying documents only: Serial/Batch physical weights,
+heat/MTC evidence and Item dimensions remain available. Shared ERP UI Pricing
+Details replaces these old controls.

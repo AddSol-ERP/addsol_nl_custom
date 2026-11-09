@@ -337,14 +337,19 @@ def main():
 	kept.extend(build_field(*spec) for spec in FIELD_SPECS)
 	# Retain historical monetary evidence without exposing the retired workflow.
 	archived = {
+		"custom_plate_details_section", "custom_plate_weight_column_break",
+		"custom_unit_weight_kg", "custom_weight_per_plate_kg",
 		"custom_rate_per_kg", "custom_est_weight_kg", "custom_supplier_weight_kg",
 		"custom_weighbridge_weight_kg", "custom_variance_pct", "custom_weight_decision",
 		"custom_billable_weight_kg", "custom_truck_net_weight_kg",
 		"custom_total_est_weight_kg", "custom_total_billable_weight_kg",
 	}
 	for field in kept:
-		if field["fieldname"] in archived:
-			field.update(hidden=1, read_only=1, in_list_view=0, reqd=0)
+		if field["fieldname"] in archived and field["dt"] in {
+			"Purchase Order", "Purchase Order Item", "Supplier Quotation", "Supplier Quotation Item",
+			"Purchase Receipt", "Purchase Receipt Item", "Purchase Invoice", "Purchase Invoice Item",
+		}:
+			field.update(hidden=1, read_only=1, in_list_view=0, reqd=0, print_hide=1)
 	kept.sort(key=lambda f: (f["dt"], f["fieldname"]))
 
 	with open(FIXTURE, "w") as f:

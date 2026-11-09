@@ -114,10 +114,12 @@ after_sync = [
 	"addsol_nl_custom.patches.v1_0.setup_finished_goods_group.execute",
 	"addsol_nl_custom.patches.v1_0.setup_purchase_order_item_layout.execute",
 	"addsol_nl_custom.patches.v1_0.setup_supplier_quotation_item_layout.execute",
+	"addsol_nl_custom.patches.v1_0.hide_legacy_plate_details.execute",
 ]
 after_migrate = [
 	"addsol_nl_custom.patches.v1_0.setup_purchase_order_item_layout.execute",
 	"addsol_nl_custom.patches.v1_0.setup_supplier_quotation_item_layout.execute",
+	"addsol_nl_custom.patches.v1_0.hide_legacy_plate_details.execute",
 ]
 
 # Uninstallation
