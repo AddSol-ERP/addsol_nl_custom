@@ -32,7 +32,7 @@ def apply_receipt_metadata(doc, method=None) -> None:
 	Only the *computation* of weight-based prices is behind the flag, and that
 	lives in purchase.py.
 	"""
-	if not doc.get("docstatus"):
+	if not doc.get("docstatus") or doc.get("is_return"):
 		return
 
 	should_stamp = False
@@ -119,9 +119,9 @@ def quality_inspection_before_submit(doc, method=None) -> None:
 	"""Require the heat number when an opted-in weighed item is inspected."""
 	if doc.get("reference_type") != "Purchase Receipt" or not doc.get("item_code"):
 		return
-	from addsol_nl_custom.addsol_nl_custom.plates.settings import is_enabled
+	from addsol_nl_custom.addsol_nl_custom.plates.settings import get_setting
 
-	if not is_enabled():
+	if not get_setting("require_heat_number", 0):
 		return
 	from addsol_nl_custom.addsol_nl_custom.plates.grouping import is_weighed_item
 
@@ -183,31 +183,13 @@ def update_quality_metadata(doctype, name, doc) -> None:
 
 
 def cost_per_kg_of(row, weight_per_plate) -> float:
-	"""The rate per kg this line was actually paid at.
-
-	With weight-based purchasing on, purchase.py puts the agreed rate per kg on
-	the line. With it off, the line still has its own rate per plate, and
-	dividing that by the plate's weight gives the same number - so the report
-	can value a batch without the feature ever having been switched on.
-	"""
-	if row.get("custom_pricing_snapshot"):
-		# Cost per physical Kg is a reporting quotient, never the commercial
-		# rate in another pricing UOM or a legacy field left on a mapped row.
-		qty = frappe.utils.flt(row.get("qty"))
-		return (
-			round_half_up(frappe.utils.flt(row.get("base_net_amount")) / (qty * weight_per_plate), 4)
-			if qty and weight_per_plate
-			else 0
-		)
-	rate_per_kg = frappe.utils.flt(row.get("custom_rate_per_kg"))
-	if rate_per_kg:
-		return rate_per_kg
-
-	rate = frappe.utils.flt(row.get("rate"))
-	if rate and weight_per_plate:
-		return round_half_up(rate / weight_per_plate, 4)
-
-	return 0.0
+	"""Company-currency cost per physical Kg, solely a reporting quotient."""
+	qty = frappe.utils.flt(row.get("stock_qty") or row.get("qty"))
+	return (
+		round_half_up(frappe.utils.flt(row.get("base_net_amount")) / (qty * weight_per_plate), 4)
+		if qty and weight_per_plate
+		else 0
+	)
 
 
 def weight_per_plate_of(row) -> float:

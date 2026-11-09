@@ -167,6 +167,12 @@ def source_serial(item, weight, warehouse=None):
 		},
 	)
 
+	from addsol_nl_custom.addsol_nl_custom.plates.legacy_pricing_migration import frozen_kg_snapshot
+	from addsol_nl_custom.addsol_nl_custom.plates.uom_pricing import stamp_snapshot
+
+	snapshot = frozen_kg_snapshot(weight, 1, weight, item.custom_length_mm, item.custom_width_mm)
+	snapshot.update(quantity=weight, cost_per_uom=COST_PER_KG)
+	stamp_snapshot("Serial No", serial.name, snapshot)
 	return serial.name
 
 

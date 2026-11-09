@@ -1,7 +1,7 @@
 """Bridge cutting to ERP UI pricing without changing stock quantities.
 
 Snapshots carry inventory cost in company currency, not the supplier's quoted
-rate. Historical pieces without a snapshot continue through the Kg path.
+rate. Historical pieces receive frozen Kg snapshots during migration.
 """
 
 import math

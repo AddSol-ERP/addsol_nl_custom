@@ -2,12 +2,6 @@ app_name = "addsol_nl_custom"
 app_title = "Addsol Nl Custom"
 app_publisher = "Addition Solutions"
 app_description = "Customization done for N L Electromech"
-purchase_receipt_capabilities = [
-	"addsol_nl_custom.addsol_nl_custom.plates.api.ui_purchase_receipt_capabilities",
-]
-purchase_receipt_item_capabilities = [
-	"addsol_nl_custom.addsol_nl_custom.plates.api.ui_purchase_receipt_item_capabilities",
-]
 # TODO(publisher): replace with the real Addition Solutions contact address.
 app_email = "contact@email.com"
 # Must agree with license.txt, which is MIT.
@@ -16,7 +10,7 @@ app_license = "mit"
 # Apps
 # ------------------
 
-# required_apps = []
+required_apps = ["erpnext_ui"]
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -63,9 +57,7 @@ doctype_js = {
 	# duplicated extension list is the one thing that would drift silently.
 	"Item": "public/js/item.js",
 	"Plate Offcut": "public/js/plate_offcut.js",
-	"Purchase Order": "public/js/purchase_weight_pricing.js",
-	"Purchase Receipt": "public/js/purchase_weight_pricing.js",
-	"Supplier Quotation": "public/js/purchase_weight_pricing.js",
+	"Purchase Receipt": "public/js/purchase_metadata.js",
 	"Sales Order": "public/js/sales_order.js",
 	"Serial No": "public/js/serial_no.js",
 	"Stock Entry": "public/js/document_attachments.js",
@@ -209,21 +201,16 @@ doc_events = {
 	"Sales Order": {
 		"validate": "addsol_nl_custom.addsol_nl_custom.finished_goods.sales_order.sales_order_validate",
 	},
-	# A plate line on a Supplier Quotation is priced by weight, exactly as on
-	# the Purchase Order, and the rate per kg is worked out from the quoted
-	# rate. The Purchase Order built from the quotation inherits it.
+	# Purchasing hooks only classify physical plate rows. ERP UI owns pricing.
 	"Supplier Quotation": {
-		"before_validate": "addsol_nl_custom.addsol_nl_custom.plates.purchase.sq_before_validate",
+		"before_validate": "addsol_nl_custom.addsol_nl_custom.plates.purchase.mark_plate_rows",
 	},
-	# Part D. All three of these stand down while Plate Settings'
-	# enable_weight_based_purchasing is off, so they cannot move money on a
-	# half-finished deployment.
+	# No customer-specific rate calculation is registered here.
 	"Purchase Order": {
-		"before_validate": "addsol_nl_custom.addsol_nl_custom.plates.purchase.po_before_validate",
+		"before_validate": "addsol_nl_custom.addsol_nl_custom.plates.purchase.mark_plate_rows",
 	},
 	"Purchase Receipt": {
-		"before_validate": "addsol_nl_custom.addsol_nl_custom.plates.purchase.pr_before_validate",
-		"before_submit": "addsol_nl_custom.addsol_nl_custom.plates.purchase.pr_before_submit",
+		"before_validate": "addsol_nl_custom.addsol_nl_custom.plates.purchase.mark_plate_rows",
 		"on_submit": "addsol_nl_custom.addsol_nl_custom.plates.receipt_meta.apply_receipt_metadata",
 	},
 	"Quality Inspection": {
@@ -231,7 +218,7 @@ doc_events = {
 		"on_submit": "addsol_nl_custom.addsol_nl_custom.plates.receipt_meta.quality_inspection_on_submit",
 	},
 	"Purchase Invoice": {
-		"before_validate": "addsol_nl_custom.addsol_nl_custom.plates.purchase.pi_before_validate",
+		"before_validate": "addsol_nl_custom.addsol_nl_custom.plates.purchase.mark_plate_rows",
 	},
 }
 
@@ -264,10 +251,7 @@ doc_events = {
 # Overriding Methods
 # ------------------------------
 
-override_whitelisted_methods = {
-	"erpnext.controllers.accounts_controller.update_child_qty_rate":
-		"addsol_nl_custom.addsol_nl_custom.plates.purchase.update_child_qty_rate",
-}
+
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,

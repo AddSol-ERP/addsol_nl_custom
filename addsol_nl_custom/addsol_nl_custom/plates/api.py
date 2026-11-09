@@ -501,49 +501,13 @@ def line_is_drawn(line) -> bool:
 
 @frappe.whitelist(allow_guest=False)
 def get_plate_settings():
-	"""Return plate-receipt UI capabilities for the signed-in user."""
-	approver_role = get_setting("approver_role")
-	user_roles = frappe.get_roles()
-	return {
-		"weight_tolerance_pct": get_setting("weight_tolerance_pct", 10),
-		"enable_weight_based_purchasing": bool(get_setting("enable_weight_based_purchasing", 0)),
-		"can_decide_weight": not approver_role or approver_role in user_roles,
-	}
+	"""Compatibility response for cached clients; per-kg purchasing is retired."""
+	return {"enable_weight_based_purchasing": False, "can_decide_weight": False}
 
 
 def ui_purchase_receipt_capabilities():
-	"""Capabilities published through erpnext_ui's optional-app hook contract."""
-	return {"weight_based": get_plate_settings()}
+	return {}
 
 
 def ui_purchase_receipt_item_capabilities(item_code):
-	"""Per-item weighed-stock flag for the generic receipt form."""
-	return {"weight_managed": is_weight_managed_item(item_code)}
-
-
-@frappe.whitelist(allow_guest=False)
-def is_weight_managed_item(item_code=None):
-	"""Tell the purchase forms whether to show weight pricing for an Item."""
-	if not item_code or not get_setting("enable_weight_based_purchasing", 0):
-		return False
-
-	from addsol_nl_custom.addsol_nl_custom.plates.grouping import is_weighed_item
-	from addsol_nl_custom.addsol_nl_custom.plates.uom_pricing import shared_pricing
-
-	return bool(is_weighed_item(item_code)) and not shared_pricing(item_code)
-
-
-@frappe.whitelist(allow_guest=False)
-def get_last_rate(item_code=None, supplier=None) -> float:
-	"""Offer the last rate per kg agreed for an Item when a line is still empty.
-
-	Only ever a starting point. The desk calls this as the buyer picks an item
-	or a supplier, and the client is written to fill the field only when it has
-	not been typed into - a rate somebody entered is never replaced by this.
-	"""
-	if not item_code:
-		return 0.0
-
-	from addsol_nl_custom.addsol_nl_custom.plates.rate_history import last_rate
-
-	return last_rate(item_code, supplier)
+	return {}

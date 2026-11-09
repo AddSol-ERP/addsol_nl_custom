@@ -335,6 +335,16 @@ def main():
 		and ((f["dt"], f["fieldname"]) in hand_tuned or (f["dt"], f["fieldname"]) not in managed)
 	]
 	kept.extend(build_field(*spec) for spec in FIELD_SPECS)
+	# Retain historical monetary evidence without exposing the retired workflow.
+	archived = {
+		"custom_rate_per_kg", "custom_est_weight_kg", "custom_supplier_weight_kg",
+		"custom_weighbridge_weight_kg", "custom_variance_pct", "custom_weight_decision",
+		"custom_billable_weight_kg", "custom_truck_net_weight_kg",
+		"custom_total_est_weight_kg", "custom_total_billable_weight_kg",
+	}
+	for field in kept:
+		if field["fieldname"] in archived:
+			field.update(hidden=1, read_only=1, in_list_view=0, reqd=0)
 	kept.sort(key=lambda f: (f["dt"], f["fieldname"]))
 
 	with open(FIXTURE, "w") as f:

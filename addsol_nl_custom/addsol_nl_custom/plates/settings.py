@@ -31,23 +31,3 @@ def get_setting(fieldname, default=None):
 		default = field.default if field else None
 
 	return default
-
-
-def is_enabled() -> bool:
-	"""Whether the weight based purchasing rules should act.
-
-	Off by default. While this is off the whole of Part D stands down and rates
-	and amounts are whatever the user typed, so a half-finished deployment
-	cannot move money.
-	"""
-	return bool(get_setting("enable_weight_based_purchasing", 0))
-
-
-def require_enabled() -> None:
-	"""Guard for entry points that must not silently do nothing."""
-	if not is_enabled():
-		frappe.throw(
-			"Weight based purchasing is switched off in Plate Settings. Turn it on to use "
-			"weight based rates and amounts on Purchase Orders, Receipts and Invoices.",
-			title="Weight based purchasing is off",
-		)

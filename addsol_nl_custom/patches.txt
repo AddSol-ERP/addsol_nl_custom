@@ -25,3 +25,5 @@ addsol_nl_custom.patches.v1_0.add_plate_offcut_register
 addsol_nl_custom.patches.v1_0.drop_include_offcuts_filter
 
 addsol_nl_custom.patches.v1_0.add_offcut_uom_metadata
+
+addsol_nl_custom.patches.v1_0.retire_kg_pricing

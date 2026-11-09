@@ -108,12 +108,8 @@ def get_source_details(source_serial_no) -> dict:
 	from addsol_nl_custom.addsol_nl_custom.plates.uom_pricing import read_snapshot
 
 	snapshot = read_snapshot(source_serial_no)
-	if not serial.custom_weight_kg and not snapshot:
-		frappe.throw(
-			_("Serial No {0} has no weight on it. It was received before weights were recorded.").format(
-				source_serial_no
-			)
-		)
+	if not snapshot:
+		frappe.throw("This serial has no per-UOM snapshot. Run the legacy pricing migration before cutting.")
 
 	batch = (
 		frappe.db.get_value(
@@ -342,11 +338,7 @@ def compute_offcut(row, details) -> None:
 		)
 		row.theoretical_weight_kg = row.weight_kg
 		return
-	theoretical = theoretical_offcut_weight(row, details)
-
-	row.theoretical_weight_kg = round_half_up(theoretical, WEIGHT_PRECISION)
-	row.weight_kg = round_half_up(theoretical * details["ratio"], WEIGHT_PRECISION)
-	row.value = round_half_up(row.weight_kg * details["cost_per_kg"], 2)
+	raise ValueError("A per-UOM source snapshot is required for cutting.")
 
 
 def theoretical_offcut_weight(row, details) -> float:

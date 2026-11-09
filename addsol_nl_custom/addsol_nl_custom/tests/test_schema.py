@@ -412,25 +412,36 @@ class TestPrintFormats(unittest.TestCase):
 
 		self.fail(f"the fixture ships no print format named {name}")
 
+	def test_dimensions_use_one_generic_column(self):
+		html = self.print_format("Purchase order")["html"]
+		self.assertIn("<th>Dimensions</th>", html)
+		self.assertIn("pricing_dimensions(row)|e", html)
+		for old_field in ("custom_length_mm", "custom_width_mm", "custom_thickness_dropdown"):
+			self.assertNotIn(old_field, html)
+		layout = json.loads(self.print_format("MPO Format")["format_data"])
+		columns = items_table_columns(layout)
+		self.assertEqual(sum(column["width"] for column in columns), 100)
+		self.assertIn("custom_pricing_dimensions", {column["fieldname"] for column in columns})
+
 	def test_the_builder_layout_carries_the_plate_columns(self):
 		layout = json.loads(self.print_format("MPO Format")["format_data"])
 		columns = {column.get("fieldname") for column in items_table_columns(layout)}
 
-		self.assertIn("custom_rate_per_kg", columns)
-		self.assertIn("custom_est_weight_kg", columns)
+		self.assertIn("custom_rate_per_pricing_uom", columns)
+		self.assertIn("custom_chargeable_qty", columns)
 
 	def test_the_jinja_format_carries_the_plate_figures(self):
 		html = self.print_format("Purchase order")["html"]
 
-		self.assertIn("row.custom_rate_per_kg", html)
-		self.assertIn("row.custom_est_weight_kg", html)
+		self.assertIn("row.custom_rate_per_pricing_uom", html)
+		self.assertIn("row.custom_chargeable_qty", html)
 
 	def test_the_jinja_format_prints_the_line_weight_not_the_plate_weight(self):
 		# The per-plate weight beside the line's quantity reads as the line's
 		# weight, and it is not: ten plates weigh ten times as much.
 		html = self.print_format("Purchase order")["html"]
 
-		self.assertIn("row.custom_est_weight_kg", html)
+		self.assertIn("row.custom_chargeable_qty", html)
 		self.assertNotIn("custom_estimated_weight", html)
 
 	def test_the_jinja_format_guards_the_address_lookup(self):
@@ -453,15 +464,15 @@ class TestPrintFormats(unittest.TestCase):
 		"""
 		html = self.print_format("Purchase order")["html"]
 
-		self.assertIn("{% if not row.custom_rate_per_kg %}", html)
+		self.assertIn("{% if row.custom_rate_per_pricing_uom %}", html)
 
 	def test_the_jinja_format_prints_nothing_for_a_line_it_has_no_figures_for(self):
 		# A line that is not priced per kg has no weight and no rate per kg.
 		# Printing "0.000" and "0.0000" for them says more than nothing does.
 		html = self.print_format("Purchase order")["html"]
 
-		self.assertIn("{% if row.custom_est_weight_kg %}", html)
-		self.assertIn("{% if row.custom_rate_per_kg %}", html)
+		self.assertIn("{% if row.custom_chargeable_qty %}", html)
+		self.assertIn("{% if row.custom_rate_per_pricing_uom %}", html)
 
 
 class TestFrappeApiUsage(unittest.TestCase):

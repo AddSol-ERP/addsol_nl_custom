@@ -12,6 +12,7 @@
   "approver_role",
   "column_break_purchasing",
   "over_billing_allowance_pct",
+  "require_heat_number",
   "section_cutting",
   "offcut_batch_series",
   "remainder_naming_series",
@@ -29,24 +30,30 @@
   {
    "bold": 1,
    "default": "0",
-   "description": "Off by default. While this is off, the weight rules in Part D do nothing: rates and amounts stay whatever the user types. Turn it on only after the acceptance tests pass on a copy site.",
+   "description": "Retired. Configure pricing in UI Uom Pricing Rule. Historical setting retained for migration.",
    "fieldname": "enable_weight_based_purchasing",
    "fieldtype": "Check",
-   "label": "Enable Weight Based Purchasing"
+   "label": "Enable Weight Based Purchasing",
+   "hidden": 1,
+   "read_only": 1
   },
   {
    "default": "10",
-   "description": "A supplier weight within this percentage of the estimated weight is accepted automatically. Above it the receipt waits for an approver. Changing this affects receipts entered afterwards only.",
+   "description": "Retired. Configure pricing in UI Uom Pricing Rule. Historical setting retained for migration.",
    "fieldname": "weight_tolerance_pct",
    "fieldtype": "Percent",
-   "label": "Weight Tolerance (%)"
+   "label": "Weight Tolerance (%)",
+   "hidden": 1,
+   "read_only": 1
   },
   {
-   "description": "Only holders of this role may decide the accepted weight when the variance is above tolerance.",
+   "description": "Retired. Configure pricing in UI Uom Pricing Rule. Historical setting retained for migration.",
    "fieldname": "approver_role",
    "fieldtype": "Link",
    "label": "Approver Role",
-   "options": "Role"
+   "options": "Role",
+   "hidden": 1,
+   "read_only": 1
   },
   {
    "fieldname": "column_break_purchasing",
@@ -54,10 +61,12 @@
   },
   {
    "default": "10",
-   "description": "Invoice amount may exceed the Purchase Order estimate by this much, which covers the weight tolerance.",
+   "description": "Retired. Configure pricing in UI Uom Pricing Rule. Historical setting retained for migration.",
    "fieldname": "over_billing_allowance_pct",
    "fieldtype": "Percent",
-   "label": "Over Billing Allowance (%)"
+   "label": "Over Billing Allowance (%)",
+   "hidden": 1,
+   "read_only": 1
   },
   {
    "fieldname": "section_cutting",
@@ -78,8 +87,8 @@
    "fieldtype": "Data",
    "label": "Remainder Naming Series"
   },
-   {
-    "description": "Item used for scrap, in Kg, valued at the source batch's cost per kg. Set by the setup patch once the Item exists; no DocType default, because a default pointing at an Item that may not exist yet fails Frappe's link check while the Single is first created.",
+  {
+   "description": "Item used for scrap, in Kg, valued at the source batch's cost per kg. Set by the setup patch once the Item exists; no DocType default, because a default pointing at an Item that may not exist yet fails Frappe's link check while the Single is first created.",
    "fieldname": "scrap_item",
    "fieldtype": "Link",
    "label": "Scrap Item",
@@ -100,6 +109,12 @@
    "fieldname": "min_offcut_width_mm",
    "fieldtype": "Float",
    "label": "Minimum Offcut Width (mm)"
+  },
+  {
+   "fieldname": "require_heat_number",
+   "fieldtype": "Check",
+   "label": "Require Heat Number on Incoming Inspection",
+   "default": "0"
   }
  ],
  "index_web_pages_for_search": 1,
