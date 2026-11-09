@@ -871,3 +871,8 @@ and custom_pricing_dimensions, separately from financial/cutting params.
 rebuilds pricing rules, weights or amounts. Current per-UOM snapshots keep their
 configured parameter display. ERP UI must support display_dimensions before NL
 migration; preserved-contract saves carry this display forward.
+
+Legacy print display order is now T × L × W (user requested), retaining short
+symbols and mm per dimension. `reorder_legacy_print_dimensions` reruns the display
+repair for sites which already completed the earlier repair patch. New per-UOM
+rules retain their configured display order.

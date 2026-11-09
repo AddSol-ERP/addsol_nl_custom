@@ -11,9 +11,9 @@ def item_dimensions(item):
 		thickness = get_item_thickness_mm(item)
 	parts = []
 	for symbol, value in (
+		("T", thickness),
 		("L", item.get("custom_length_mm")),
 		("W", item.get("custom_width_mm")),
-		("T", thickness),
 	):
 		if value in (None, ""):
 			continue
