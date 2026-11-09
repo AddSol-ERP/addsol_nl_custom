@@ -846,3 +846,11 @@ reconcile historical Kg weight/rate/amount. Allocate accepted receipt total over
 stock_qty, never Item theoretical weight. Report allocations with source IDs in
 `recovered_serial_weights`. Exclude cutting-generated offcuts/remainders. Existing
 serial weights/snapshots are not replaced; unresolved active stock still blocks.
+
+Missing-weight serials belonging to a submitted PR's explicit rejected bundle are
+not allocated the accepted paid Kg. Validate the entire rejected bundle against
+rejected_qty * conversion_factor and the serial's current rejected warehouse.
+Report them separately in `rejected_serials_without_weight` and leave their weight,
+valuation and snapshot untouched; they do not block paid-stock migration. Missing
+or ambiguous source links and later movements still require review. This handles
+50 accepted + 5 rejected serials without allocating the 50-unit paid weight to 55.

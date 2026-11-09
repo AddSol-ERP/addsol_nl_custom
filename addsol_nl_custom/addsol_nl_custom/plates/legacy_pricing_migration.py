@@ -138,6 +138,34 @@ def receipt_bundle_weight(serial, receipt, entries):
 	return converted["custom_chargeable_qty"] / units
 
 
+class RejectedStockWithoutWeight(ValueError):
+	"""Verified unpriced rejected stock; do not infer accepted-stock weight."""
+
+	def __init__(self, receipt):
+		super().__init__("Rejected stock has no recorded weight; excluded from paid Kg recovery.")
+		self.receipt = receipt
+
+
+def validate_rejected_bundle(serial, receipt, entries):
+	if receipt.get("docstatus") != 1 or receipt.get("item_code") != serial.get("item_code"):
+		raise ValueError("Rejected bundle requires a submitted receipt for the same Item.")
+	if not receipt.get("rejected_warehouse") or serial.get("warehouse") != receipt.get("rejected_warehouse"):
+		raise ValueError(
+			"Serial is not in the receipt's rejected warehouse; review its subsequent movements."
+		)
+	units = positive(receipt.get("rejected_qty"), "Rejected quantity") * positive(
+		receipt.get("conversion_factor"), "Receipt conversion factor"
+	)
+	names = [entry.get("serial_no") for entry in entries]
+	if not entries or any(not name for name in names) or len(set(names)) != len(names):
+		raise ValueError("Rejected bundle must contain distinct serials.")
+	if len(entries) != units or any(float(entry.get("qty") or 0) != 1 for entry in entries):
+		raise ValueError("Rejected bundle quantities do not reconcile with rejected stock quantity.")
+	matching = [entry for entry in entries if entry.get("serial_no") == serial.get("name")]
+	if len(matching) != 1 or matching[0].get("batch_no") != serial.get("batch_no"):
+		raise ValueError("Rejected bundle does not match this serial and batch.")
+
+
 def recover_serial_weight(serial):
 	"""Read-only lookup; ambiguous source receipts must be reviewed explicitly."""
 	links = frappe.get_all(
@@ -169,6 +197,38 @@ def recover_serial_weight(serial):
 		fields=fields,
 		limit_page_length=0,
 	)
+	if not receipts and frappe.db.has_column("Purchase Receipt Item", "rejected_serial_and_batch_bundle"):
+		rejected = frappe.get_all(
+			"Purchase Receipt Item",
+			filters={
+				"rejected_serial_and_batch_bundle": ["in", bundles],
+				"item_code": serial.item_code,
+				"docstatus": 1,
+			},
+			fields=[
+				"name",
+				"parent",
+				"docstatus",
+				"item_code",
+				"rejected_qty",
+				"conversion_factor",
+				"rejected_warehouse",
+				"rejected_serial_and_batch_bundle",
+			],
+			limit_page_length=0,
+		)
+		if len(rejected) == 1:
+			rejected_row = rejected[0]
+			if frappe.db.get_value("Purchase Receipt", rejected_row.parent, "is_return"):
+				raise ValueError("A return receipt cannot classify original rejected stock.")
+			entries = frappe.get_all(
+				"Serial and Batch Entry",
+				filters={"parent": rejected_row.rejected_serial_and_batch_bundle},
+				fields=["serial_no", "batch_no", "qty"],
+				limit_page_length=0,
+			)
+			validate_rejected_bundle(serial, rejected_row, entries)
+			raise RejectedStockWithoutWeight(rejected_row)
 	if len(receipts) != 1:
 		raise ValueError(f"Expected one original submitted receipt; found {len(receipts)}.")
 	receipt = receipts[0]
@@ -207,6 +267,7 @@ def run(dry_run=True):
 				raise ValueError(f"Migrate ERP UI first: {dt}.{field} is missing.")
 	updates, errors, items, serial_updates = [], [], {}, []
 	recovered_weights = []
+	rejected_without_weight = []
 	old_enabled = frappe.db.get_single_value("Plate Settings", "enable_weight_based_purchasing")
 	if old_enabled:
 		from erpnext_ui.uom_pricing import is_uom_pricing_enabled
@@ -331,6 +392,15 @@ def run(dry_run=True):
 					raise ValueError(
 						"Active plate serial stock UOM is not Nos; verify its per-stock-unit measurement explicitly."
 					)
+			except RejectedStockWithoutWeight as exc:
+				rejected_without_weight.append(
+					{
+						"serial": serial.name,
+						"receipt": exc.receipt.parent,
+						"receipt_row": exc.receipt.name,
+						"reason": str(exc),
+					}
+				)
 			except (ValueError, TypeError) as exc:
 				if serial.get("warehouse") and serial.get("status") == "Active":
 					errors.append(f"Serial {serial.name}: {exc}")
@@ -377,6 +447,7 @@ def run(dry_run=True):
 		"transaction_rows": len(updates),
 		"serials": len(serial_updates),
 		"recovered_serial_weights": recovered_weights,
+		"rejected_serials_without_weight": rejected_without_weight,
 		"batches": len(batch_updates),
 		"mixed_batches_using_serial_snapshots": mixed_batches,
 		"groups_requiring_kg_rule": groups,

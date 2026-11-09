@@ -62,3 +62,11 @@ reports `recovered_serial_weights` with receipt and row identifiers. Only absent
 serial weights are repaired; existing weights/snapshots, stock quantities and
 accounting amounts remain unchanged. Offcuts/remainders, ambiguous receipts,
 returns, mismatched bundles and missing source records still require review.
+
+Rejected stock is separate from the receipt's accepted paid weight. For a missing
+weight, migration checks the receipt's explicit rejected bundle, submitted status,
+Item/batch/serial membership, rejected stock quantity and current rejected warehouse.
+Verified rejected serials appear in `rejected_serials_without_weight` without
+blocking conversion of paid stock. They receive no invented weight or cost snapshot;
+cutting remains unavailable until their physical weight and pricing basis are
+established separately. Stock movements and ledger amounts are never modified.

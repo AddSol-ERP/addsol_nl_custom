@@ -136,3 +136,22 @@ class MigrationTests(unittest.TestCase):
 		for changes in (dict(amount=1), dict(amount=0, custom_billable_weight_kg=0)):
 			with self.assertRaises(ValueError):
 				migration.receipt_bundle_weight(serial, {**receipt, **changes}, entries)
+
+	def test_verified_rejected_stock_is_separate_from_paid_weight(self):
+		serial = dict(name="PL-000056", item_code="ANGLE", batch_no="BATCH", warehouse="Returnable")
+		receipt = dict(
+			docstatus=1,
+			item_code="ANGLE",
+			rejected_qty=5,
+			conversion_factor=1,
+			rejected_warehouse="Returnable",
+			qty=50,
+			custom_billable_weight_kg=910,
+		)
+		entries = [dict(serial_no=f"PL-{n:06d}", batch_no="BATCH", qty=1) for n in range(52, 57)]
+		migration.validate_rejected_bundle(serial, receipt, entries)
+		for bad in (entries[:-1], [*entries[:-1], entries[0]]):
+			with self.assertRaises(ValueError):
+				migration.validate_rejected_bundle(serial, receipt, bad)
+		with self.assertRaisesRegex(ValueError, "subsequent movements"):
+			migration.validate_rejected_bundle({**serial, "warehouse": "Production"}, receipt, entries)
