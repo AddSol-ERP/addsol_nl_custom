@@ -396,16 +396,7 @@ fixtures = [
 	},
 	{"dt": "Report", "filters": [["module", "=", "Addsol Nl Custom"]]},
 	{"dt": "Role", "filters": [["is_custom", "=", 1]]},
-	{
-		"dt": "Notification",
-		"filters": [
-			[
-				"name",
-				"in",
-				["notification After Submission Of SO", "Material Request Receipt Notification"],
-			]
-		],
-	},
+
 	"Role Profile",
 	"Module Profile",
 	"Workflow",

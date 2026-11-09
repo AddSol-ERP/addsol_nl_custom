@@ -890,3 +890,12 @@ flags so fixture sync cannot restore them. Patch also runs after_sync and
  after_migrate. Scope is buying documents only: Serial/Batch physical weights,
 heat/MTC evidence and Item dimensions remain available. Shared ERP UI Pricing
 Details replaces these old controls.
+
+## Standard Notification fixture import (2026-11-09)
+
+Do not export is_standard=1 Notifications as editable fixtures. Removed the NL
+fixture exports for ERPNext's Material Request Receipt Notification (Manufacturing)
+and the app's notification After Submission Of SO. Standard definitions belong to
+the owning app's notification directory and follow normal module sync. Importing
+them as fixtures can trigger Cannot edit Standard Notification in production.
+Do not toggle developer_mode or delete live Notifications to work around it.
