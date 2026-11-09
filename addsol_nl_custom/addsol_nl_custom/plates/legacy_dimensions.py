@@ -10,14 +10,10 @@ def item_dimensions(item):
 
 		thickness = get_item_thickness_mm(item)
 	parts = []
-	for symbol, value in (
-		("T", thickness),
-		("L", item.get("custom_length_mm")),
-		("W", item.get("custom_width_mm")),
-	):
+	for value in (thickness, item.get("custom_length_mm"), item.get("custom_width_mm")):
 		if value in (None, ""):
 			continue
 		value = float(value)
 		if math.isfinite(value) and value > 0:
-			parts.append(f"{symbol} {value:.12g} mm")
+			parts.append(f"{value:.12g} mm")
 	return " \u00d7 ".join(parts)

@@ -876,3 +876,7 @@ Legacy print display order is now T × L × W (user requested), retaining short
 symbols and mm per dimension. `reorder_legacy_print_dimensions` reruns the display
 repair for sites which already completed the earlier repair patch. New per-UOM
 rules retain their configured display order.
+
+Legacy dimension text now omits parameter symbols, retaining T/L/W value order,
+e.g. `10 mm × 3000 mm × 1500 mm`. `refresh_legacy_dimension_values` reapplies
+print-only repair on already-migrated sites. No financial or cutting data changes.

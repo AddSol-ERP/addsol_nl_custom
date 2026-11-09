@@ -31,3 +31,5 @@ addsol_nl_custom.patches.v1_0.retire_kg_pricing
 addsol_nl_custom.patches.v1_0.repair_legacy_print_dimensions
 
 addsol_nl_custom.patches.v1_0.reorder_legacy_print_dimensions
+
+addsol_nl_custom.patches.v1_0.refresh_legacy_dimension_values

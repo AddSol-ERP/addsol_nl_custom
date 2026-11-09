@@ -81,3 +81,6 @@ separately as display_dimensions. Deploy ERP UI's updated formatter first.
 Legacy Item dimensions print in thickness × length × width order, e.g.
 `T 10 mm × L 3000 mm × W 1500 mm`. The reorder patch refreshes saved legacy
 displays even if the preceding dimension repair has already run.
+
+The final compact display omits symbols: `10 mm × 3000 mm × 1500 mm`, still
+in thickness × length × width order. The refresh patch updates existing displays.
