@@ -93,6 +93,9 @@ def row_conversion(row, item):
 	snapshot = frozen_kg_snapshot(
 		measured, qty, nominal, item.get("custom_length_mm"), item.get("custom_width_mm")
 	)
+	from addsol_nl_custom.addsol_nl_custom.plates.legacy_dimensions import item_dimensions
+
+	snapshot["display_dimensions"] = item_dimensions(item)
 	# A half-migrated row must not have its already-entered new rate replaced.
 	new_rate = float(row.get("custom_rate_per_pricing_uom") or 0)
 	if new_rate and not math.isclose(new_rate, rate, rel_tol=1e-9):

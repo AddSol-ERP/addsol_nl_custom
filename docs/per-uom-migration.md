@@ -70,3 +70,10 @@ Verified rejected serials appear in `rejected_serials_without_weight` without
 blocking conversion of paid stock. They receive no invented weight or cost snapshot;
 cutting remains unavailable until their physical weight and pricing basis are
 established separately. Stock movements and ledger amounts are never modified.
+
+Historical dimension correction: `repair_legacy_print_dimensions` reads the Item's
+custom_length_mm, custom_width_mm and linked Thickness master and updates only
+print display metadata for legacy Kg buying rows. It also repairs rows converted
+by earlier migrations. Pricing/cutting snapshots retain their original rules,
+parameters and financial quantities; the corrected L/W/T display is stored
+separately as display_dimensions. Deploy ERP UI's updated formatter first.

@@ -859,3 +859,15 @@ Direct Entry migration estimates must write numeric zero to the two generic
 estimate display columns: Frappe/MariaDB may define them NOT NULL. Keep JSON
 `calculated_chargeable_qty` and `baseline_per_unit` null so prints/UI still know
 there is no formula estimate. Actual chargeable quantities and rates are unchanged.
+
+## Correct historical print geometry from Item (2026-11-09)
+
+For legacy Kg rows, the user explicitly requested Item master geometry for the
+print display: custom_length_mm, custom_width_mm, and numeric mm thickness via
+get_item_thickness_mm / the linked Thickness master. `plates.legacy_dimensions`
+formats these as short L/W/T values. Store text in snapshot.display_dimensions
+and custom_pricing_dimensions, separately from financial/cutting params.
+`repair_legacy_print_dimensions` corrects already-migrated buying rows; it never
+rebuilds pricing rules, weights or amounts. Current per-UOM snapshots keep their
+configured parameter display. ERP UI must support display_dimensions before NL
+migration; preserved-contract saves carry this display forward.
